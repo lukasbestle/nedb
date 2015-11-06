@@ -172,6 +172,34 @@ describe('Persistence', function () {
       });
     });
   });
+  
+  it('compactDatafile() takes callback', function (done) {
+    d.insert({ a: 2 }, function () {
+      d.insert({ a: 4 }, function () {
+        d.remove({ a: 2 }, {}, function () {
+          // Here, the underlying file is 3 lines long for only one document
+          var data = fs.readFileSync(d.filename, 'utf8').split('\n')
+            , filledCount = 0;
+
+          data.forEach(function (item) { if (item.length > 0) { filledCount += 1; } });
+          filledCount.should.equal(3);
+
+          d.persistence.compactDatafile(function (err) {
+            assert.isNull(err);
+
+            // Now, the file has been compacted and is only 1 line long
+            var data = fs.readFileSync(d.filename, 'utf8').split('\n')
+              , filledCount = 0;
+
+            data.forEach(function (item) { if (item.length > 0) { filledCount += 1; } });
+            filledCount.should.equal(1);
+
+            done();
+          });
+        })
+      });
+    });
+  });
 
   it('Calling loadDatabase after the data was modified doesnt change its contents', function (done) {
     d.loadDatabase(function () {

@@ -106,9 +106,9 @@ db.robots.loadDatabase();
 ### Compacting the database
 Under the hood, NeDB's persistence uses an append-only format, meaning that all updates and deletes actually result in lines added at the end of the datafile. The reason for this is that disk space is very cheap and appends are much faster than rewrites since they don't do a seek. The database is automatically compacted (i.e. put back in the one-line-per-document format) everytime your application restarts.
 
-You can manually call the compaction function with `yourDatabase.persistence.compactDatafile` which takes no argument. It queues a compaction of the datafile in the executor, to be executed sequentially after all pending operations.
+You can manually call the compaction function with `yourDatabase.persistence.compactDatafile(callback)`. It queues a compaction of the datafile in the executor, to be executed sequentially after all pending operations and calls the optional `callback` afterwards.
 
-You can also set automatic compaction at regular intervals with `yourDatabase.persistence.setAutocompactionInterval(interval)`, `interval` in milliseconds (a minimum of 5s is enforced), and stop automatic compaction with `yourDatabase.persistence.stopAutocompaction()`.
+You can also set automatic compaction at regular intervals with `yourDatabase.persistence.setAutocompactionInterval(interval, callback)`, `interval` in milliseconds (a minimum of 5s is enforced), and stop automatic compaction with `yourDatabase.persistence.stopAutocompaction()`. The optional `callback` will be called after each compaction.
 
 Keep in mind that compaction takes a bit of time (not too much: 130ms for 50k records on my slow machine) and no other operation can happen when it does, so most projects actually don't need to use it.
 
