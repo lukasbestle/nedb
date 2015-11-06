@@ -6,7 +6,7 @@ function testsFailed () {
 }
 
 localStorage.removeItem('test');
-var db = new Nedb({ filename: 'test', autoload: true });
+var db = new Newdb({ filename: 'test', autoload: true });
 db.insert({ hello: 'world' }, function (err) {
   if (err) {
     testsFailed();

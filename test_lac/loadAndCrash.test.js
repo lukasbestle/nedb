@@ -1,5 +1,5 @@
-var Nedb = require('../lib/datastore.js')
-  , db = new Nedb({ filename: 'workspace/lac.db' })
+var Newdb = require('../lib/datastore.js')
+  , db = new Newdb({ filename: 'workspace/lac.db' })
   ;
 
 db.loadDatabase();
