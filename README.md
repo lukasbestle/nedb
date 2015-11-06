@@ -1,23 +1,26 @@
-<img src="http://i.imgur.com/9O1xHFb.png" style="width: 25%; height: 25%; float: left;">
+![](https://cdn.codesignd.net/projects/newdb/logo.svg)
 
 ## The Javascript Database
 
 **Embedded persistent or in memory database for Node.js, nw.js, Electron and browsers, 100% Javascript, no binary dependency**. API is a subset of MongoDB's and it's <a href="#speed">plenty fast</a>.
 
-**IMPORTANT NOTE**: Please don't submit issues for questions regarding your code. Only actual bugs or feature requests will be answered, all others will be closed without comment. Also, please follow the <a href="#bug-reporting-guidelines">bug reporting guidelines</a> and check the <a href="https://github.com/louischatriot/nedb/wiki/Change-log" target="_blank">change log</a> before submitting an already fixed bug :)
+**IMPORTANT NOTE**: Please don't submit issues for questions regarding your code. Only actual bugs or feature requests will be answered, all others will be closed without comment. Also, please follow the <a href="#bug-reporting-guidelines">bug reporting guidelines</a> and check the <a href="https://github.com/lukasbestle/newdb/wiki/Change-log" target="_blank">change log</a> before submitting an already fixed bug :)
 
-## Support NeDB development
-No time to <a href="#help-out">help out</a>? You can support NeDB development by sending money or bitcoins!
+## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
 
-Money: [![Donate to author](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=louis%2echatriot%40gmail%2ecom&lc=US&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donate_LG%2egif%3aNonHostedGuest)
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.2.1**.
 
-Bitcoin address: 1dDZLnWpBbodPiN8sizzYrgaz5iahFyb1
+NewDB adds the following features to the existing feature set of NeDB:
 
+* <a href="#storing-database-metadata">Allows storing metadata inside your datastore files</a>
+* <a href="#compacting-the-database">Implements a callback after compaction completes</a>
+
+It is a drop-in replacement for NeDB and is fully compatible to existing NeDB databases.
 
 ## Installation, tests
-Module name on npm is `nedb`.
+Module name on npm is `newdb`.
 ```javascript
-npm install nedb --save   // Put latest version in your package.json
+npm install newdb --save   // Put latest version in your package.json
 npm test   // You'll need the dev dependencies to launch tests
 ```
 
@@ -42,9 +45,9 @@ It's a subset of MongoDB's API (the most used operations).
 * <a href="#browser-version">Browser version</a>
 
 ### Creating/loading a database
-You can use NeDB as an in-memory only datastore or as a persistent datastore. One datastore is the equivalent of a MongoDB collection. The constructor is used as follows `new Datastore(options)` where `options` is an object with the following fields:  
+You can use NewDB as an in-memory only datastore or as a persistent datastore. One datastore is the equivalent of a MongoDB collection. The constructor is used as follows `new Datastore(options)` where `options` is an object with the following fields:  
 
-* `filename` (optional): path to the file where the data is persisted. If left blank, the datastore is automatically considered in-memory only. It cannot end with a `~` which is used in the temporary files NeDB uses to perform crash-safe writes
+* `filename` (optional): path to the file where the data is persisted. If left blank, the datastore is automatically considered in-memory only. It cannot end with a `~` which is used in the temporary files NewDB uses to perform crash-safe writes
 * `inMemoryOnly` (optional, defaults to false): as the name implies.
 * `autoload` (optional, defaults to false): if used, the database will
   automatically be loaded from the datafile upon creation (you don't
@@ -52,11 +55,11 @@ need to call `loadDatabase`). Any command
 issued before load is finished is buffered and will be executed when
 load is done.
 * `onload` (optional): if you use autoloading, this is the handler called after the `loadDatabase`. It takes one `error` argument. If you use autoloading without specifying this handler, and an error happens during load, an error will be thrown.
-* `afterSerialization` (optional): hook you can use to transform data after it was serialized and before it is written to disk. Can be used for example to encrypt data before writing database to disk. This function takes a string as parameter (one line of an NeDB data file) and outputs the transformed string, **which must absolutely not contain a `\n` character** (or data will be lost)
-* `beforeDeserialization` (optional): reverse of `afterSerialization`. Make sure to include both and not just one or you risk data loss. For the same reason, make sure both functions are inverses of one another. Some failsafe mechanisms are in place to prevent data loss if you misuse the serialization hooks: NeDB checks that never one is declared without the other, and checks that they are reverse of one another by testing on random strings of various lengths. In addition, if too much data is detected as corrupt, NeDB will refuse to start as it could mean you're not using the deserialization hook corresponding to the serialization hook used before (see below)
-* `firstLine` (optional): string or function. NeDB will use the string value or function return value to store it as the first line of the datastore. You can use this option to store metadata like the file type or database options that can be retrieved via `Datastore.getFirstLine()` again at any time. The (return) value **must absolutely not contain a `\n` character** (or data will be lost). Please see <a href="#storing-database-metadata">Storing database metadata</a> for more information
-* `corruptAlertThreshold` (optional): between 0 and 1, defaults to 10%. NeDB will refuse to start if more than this percentage of the datafile is corrupt. 0 means you don't tolerate any corruption, 1 means you don't care 
-* `nodeWebkitAppName` (optional, **DEPRECATED**): if you are using NeDB from whithin a Node Webkit app, specify its name (the same one you use in the `package.json`) in this field and the `filename` will be relative to the directory Node Webkit uses to store the rest of the application's data (local storage etc.). It works on Linux, OS X and Windows. Now that you can use `require('nw.gui').App.dataPath` in Node Webkit to get the path to the data directory for your application, you should not use this option anymore and it will be removed.
+* `afterSerialization` (optional): hook you can use to transform data after it was serialized and before it is written to disk. Can be used for example to encrypt data before writing database to disk. This function takes a string as parameter (one line of an NewDB data file) and outputs the transformed string, **which must absolutely not contain a `\n` character** (or data will be lost)
+* `beforeDeserialization` (optional): reverse of `afterSerialization`. Make sure to include both and not just one or you risk data loss. For the same reason, make sure both functions are inverses of one another. Some failsafe mechanisms are in place to prevent data loss if you misuse the serialization hooks: NewDB checks that never one is declared without the other, and checks that they are reverse of one another by testing on random strings of various lengths. In addition, if too much data is detected as corrupt, NewDB will refuse to start as it could mean you're not using the deserialization hook corresponding to the serialization hook used before (see below)
+* `firstLine` (optional): string or function. NewDB will use the string value or function return value to store it as the first line of the datastore. You can use this option to store metadata like the file type or database options that can be retrieved via `Datastore.getFirstLine()` again at any time. The (return) value **must absolutely not contain a `\n` character** (or data will be lost). Please see <a href="#storing-database-metadata">Storing database metadata</a> for more information
+* `corruptAlertThreshold` (optional): between 0 and 1, defaults to 10%. NewDB will refuse to start if more than this percentage of the datafile is corrupt. 0 means you don't tolerate any corruption, 1 means you don't care 
+* `nodeWebkitAppName` (optional, **DEPRECATED**): if you are using NewDB from whithin a Node Webkit app, specify its name (the same one you use in the `package.json`) in this field and the `filename` will be relative to the directory Node Webkit uses to store the rest of the application's data (local storage etc.). It works on Linux, OS X and Windows. Now that you can use `require('nw.gui').App.dataPath` in Node Webkit to get the path to the data directory for your application, you should not use this option anymore and it will be removed.
 
 If you use a persistent datastore without the `autoload` option, you need to call `loadDatabase` manually.
 This function fetches the data from datafile and prepares the database. **Don't forget it!** If you use a
@@ -66,12 +69,12 @@ option.
 
 ```javascript
 // Type 1: In-memory only datastore (no need to load the database)
-var Datastore = require('nedb')
+var Datastore = require('newdb')
   , db = new Datastore();
 
 
 // Type 2: Persistent datastore with manual loading
-var Datastore = require('nedb')
+var Datastore = require('newdb')
   , db = new Datastore({ filename: 'path/to/datafile' });
 db.loadDatabase(function (err) {    // Callback is optional
   // Now commands will be executed
@@ -79,14 +82,14 @@ db.loadDatabase(function (err) {    // Callback is optional
 
 
 // Type 3: Persistent datastore with automatic loading
-var Datastore = require('nedb')
+var Datastore = require('newdb')
   , db = new Datastore({ filename: 'path/to/datafile', autoload: true });
 // You can issue commands right away
 
 
 // Type 4: Persistent datastore for a Node Webkit app called 'nwtest'
-// For example on Linux, the datafile will be ~/.config/nwtest/nedb-data/something.db
-var Datastore = require('nedb')
+// For example on Linux, the datafile will be ~/.config/nwtest/newdb-data/something.db
+var Datastore = require('newdb')
   , path = require('path')
   , db = new Datastore({ filename: path.join(require('nw.gui').App.dataPath, 'something.db') });
 
@@ -103,7 +106,7 @@ db.robots.loadDatabase();
 ```
 
 ### Compacting the database
-Under the hood, NeDB's persistence uses an append-only format, meaning that all updates and deletes actually result in lines added at the end of the datafile. The reason for this is that disk space is very cheap and appends are much faster than rewrites since they don't do a seek. The database is automatically compacted (i.e. put back in the one-line-per-document format) everytime your application restarts.
+Under the hood, NewDB's persistence uses an append-only format, meaning that all updates and deletes actually result in lines added at the end of the datafile. The reason for this is that disk space is very cheap and appends are much faster than rewrites since they don't do a seek. The database is automatically compacted (i.e. put back in the one-line-per-document format) everytime your application restarts.
 
 You can manually call the compaction function with `yourDatabase.persistence.compactDatafile(callback)`. It queues a compaction of the datafile in the executor, to be executed sequentially after all pending operations and calls the optional `callback` afterwards.
 
@@ -117,7 +120,7 @@ The native types are `String`, `Number`, `Boolean`, `Date` and `null`. You can a
 arrays and subdocuments (objects). If a field is `undefined`, it will not be saved (this is different from 
 MongoDB which transforms `undefined` in `null`, something I find counter-intuitive).  
 
-If the document does not contain an `_id` field, NeDB will automatically generated one for you (a 16-characters alphanumerical string). The `_id` of a document, once set, cannot be modified.
+If the document does not contain an `_id` field, NewDB will automatically generated one for you (a 16-characters alphanumerical string). The `_id` of a document, once set, cannot be modified.
 
 Field names cannot begin by '$' or contain a '.'.
 
@@ -125,11 +128,11 @@ Field names cannot begin by '$' or contain a '.'.
 var doc = { hello: 'world'
                , n: 5
                , today: new Date()
-               , nedbIsAwesome: true
+               , newdbIsAwesome: true
                , notthere: null
                , notToBeSaved: undefined  // Will not be saved
                , fruits: [ 'apple', 'orange', 'pear' ]
-               , infos: { name: 'nedb' }
+               , infos: { name: 'newdb' }
                };
 
 db.insert(doc, function (err, newDoc) {   // Callback is optional
@@ -263,7 +266,7 @@ db.find({ planet: { $regex: /ar/, $nin: ['Jupiter', 'Earth'] } }, function (err,
 ```
 
 #### Array fields
-When a field in a document is an array, NeDB first tries to see if there is an array-specific comparison function (for now there is only `$size`) being used
+When a field in a document is an array, NewDB first tries to see if there is an array-specific comparison function (for now there is only `$size`) being used
 and tries it first. If there isn't, the query is treated as a query on every element and there is a match if at least one element matches.
 
 ```javascript
@@ -486,7 +489,7 @@ db.update({ _id: 'id6' }, { $addToSet: { fruits: 'apple' } }, {}, function () {
   // If we had used a fruit not in the array, e.g. 'banana', it would have been added to the array
 });
 
-// $pull removes all values matching a value or even any NeDB query from the array
+// $pull removes all values matching a value or even any NewDB query from the array
 db.update({ _id: 'id6' }, { $pull: { fruits: 'apple' } }, {}, function () {
   // Now the fruits array is ['orange', 'pear']
 });
@@ -530,7 +533,7 @@ db.remove({ system: 'solar' }, { multi: true }, function (err, numRemoved) {
 ```
 
 ### Indexing
-NeDB supports indexing. It gives a very nice speed boost and can be used to enforce a unique constraint on a field. You can index any field, including fields in nested documents using the dot notation. For now, indexes are only used to speed up basic queries and queries using `$in`, `$lt`, `$lte`, `$gt` and `$gte`. The indexed values cannot be of type array of object.
+NewDB supports indexing. It gives a very nice speed boost and can be used to enforce a unique constraint on a field. You can index any field, including fields in nested documents using the dot notation. For now, indexes are only used to speed up basic queries and queries using `$in`, `$lt`, `$lte`, `$gt` and `$gte`. The indexed values cannot be of type array of object.
 
 To create an index, use `datastore.ensureIndex(options, cb)`, where callback is optional and get passed an error if any (usually a unique constraint that was violated). `ensureIndex` can be called when you want, even after some data was inserted, though it's best to call it at application startup. The options are:  
 
@@ -559,9 +562,9 @@ db.ensureIndex({ fieldName: 'somefield', unique: true, sparse: true }, function 
 
 
 // Format of the error message when the unique constraint is not met
-db.insert({ somefield: 'nedb' }, function (err) {
+db.insert({ somefield: 'newdb' }, function (err) {
   // err is null
-  db.insert({ somefield: 'nedb' }, function (err) {
+  db.insert({ somefield: 'newdb' }, function (err) {
     // err is { errorType: 'uniqueViolated'
     //        , key: 'name'
     //        , message: 'Unique constraint violated for key name' }
@@ -576,7 +579,7 @@ db.removeIndex('somefield', function (err) {
 **Note:** the `ensureIndex` function creates the index synchronously, so it's best to use it at application startup. It's quite fast so it doesn't increase startup time much (35 ms for a collection containing 10,000 documents).
 
 ## Storing database metadata
-NeDB offers a feature to store information about a database separately from the data (for example the file type or database options) so that your application (or any other application that doesn't even use NeDB) can use this information before the database is loaded.
+NewDB offers a feature to store information about a database separately from the data (for example the file type or database options) so that your application (or any other application that doesn't even use NewDB) can use this information before the database is loaded.
 This metadata can be an arbitrary string and will always be stored as the first line of the datastore file.
 
 For this to work, you need two components:
@@ -586,7 +589,7 @@ For this to work, you need two components:
 You can set the metadata by using the `firstLine` option of the Datastore object:
 
 ```javascript
-var Datastore = require('nedb');
+var Datastore = require('newdb');
 var db = new Datastore({
   filename: 'path/to/datafile',
   firstLine: function () {
@@ -599,23 +602,23 @@ var db = new Datastore({
 If you don't need dynamic metadata, you can also simply use a string:
 
 ```javascript
-var Datastore = require('nedb');
+var Datastore = require('newdb');
 var db = new Datastore({
   filename: 'path/to/datafile',
   firstLine: 'mydatabasetype'
 });
 ```
 
-If you set this option, NeDB will call the function/use the string value every time the data is persisted (meaning each time after the database has been loaded and when manually compacting).
+If you set this option, NewDB will call the function/use the string value every time the data is persisted (meaning each time after the database has been loaded and when manually compacting).
 
-**WARNING**: The value you return **must absolutely not contain a `\n` character** (or data will be lost). Also please note that **you need to set this option every time you open a database that is using this feature**, otherwise NeDB will treat the first line of the file as a normal NeDB document and discard it because it's most likely invalid.
+**WARNING**: The value you return **must absolutely not contain a `\n` character** (or data will be lost). Also please note that **you need to set this option every time you open a database that is using this feature**, otherwise NewDB will treat the first line of the file as a normal NewDB document and discard it because it's most likely invalid.
 
 ### Getting metadata
 
 You can get the currently stored metadata using the `getFirstLine()` method:
 
 ```javascript
-var Datastore = require('nedb');
+var Datastore = require('newdb');
 var db = new Datastore({
   filename: 'path/to/datafile',
   firstLine: 'mydatabasetype'
@@ -634,7 +637,7 @@ db.getFirstLine(function (err, firstLine) {
 If you need access to the metadata before creating an instance of `Datastore` (and only then), you can also use the method statically (but of course you need to pass the filename of the datastore file):
 
 ```javascript
-var Datastore = require('nedb');
+var Datastore = require('newdb');
 
 Datastore.getFirstLine('path/to/datafile', function (err, firstLine) {
   if(err) throw err;
@@ -645,12 +648,12 @@ Datastore.getFirstLine('path/to/datafile', function (err, firstLine) {
 
 
 ## Browser version
-As of v0.8.0, you can use NeDB in the browser! You can find it and its minified version in the repository, in the `browser-version/out` directory. You only need to require `nedb.js` or `nedb.min.js` in your HTML file and the global object `Nedb` can be used right away, with the same API as the server version:
+As of v0.8.0, you can use NewDB in the browser! You can find it and its minified version in the repository, in the `browser-version/out` directory. You only need to require `newdb.js` or `newdb.min.js` in your HTML file and the global object `Newdb` can be used right away, with the same API as the server version:
 
 ```
-<script src="nedb.min.js"></script>
+<script src="newdb.min.js"></script>
 <script>
-  var db = new Nedb();   // Create an in-memory only datastore
+  var db = new Newdb();   // Create an in-memory only datastore
   
   db.insert({ planet: 'Earth' });
   db.insert({ planet: 'Mars' });
@@ -661,18 +664,18 @@ As of v0.8.0, you can use NeDB in the browser! You can find it and its minified 
 </script>
 ```
 
-It has been tested and is compatible with Chrome, Safari, Firefox, IE 10, IE 9. Please open an issue if you need compatibility with IE 8/IE 7, I think it will need some work and am not sure it is needed, since most complex webapplications - the ones that would need NeDB - only work on modern browsers anyway. To launch the tests, simply open the file `browser-version/test/index.html` in a browser and you'll see the results of the tests for this browser.
+It has been tested and is compatible with Chrome, Safari, Firefox, IE 10, IE 9. Please open an issue if you need compatibility with IE 8/IE 7, I think it will need some work and am not sure it is needed, since most complex webapplications - the ones that would need NewDB - only work on modern browsers anyway. To launch the tests, simply open the file `browser-version/test/index.html` in a browser and you'll see the results of the tests for this browser.
 
-If you fork and modify nedb, you can build the browser version from the sources, the build script is `browser-version/build.js`.
+If you fork and modify newdb, you can build the browser version from the sources, the build script is `browser-version/build.js`.
 
-As of v0.11, NeDB is also persistent on the browser. To use this, simply create the collection with the `filename` option which will be the name of the `localStorage` variable storing data. Persistence should work on all browsers where NeDB works. Also, keep in mind that `localStorage` has size constraints, so it's probably a good idea to set recurring compaction every 2-5 minutes to save on space if your client app needs a lot of updates and deletes. See <a href="#compacting-the-database">database compaction</a> for more details on the append-only format used by NeDB.
+As of v0.11, NewDB is also persistent on the browser. To use this, simply create the collection with the `filename` option which will be the name of the `localStorage` variable storing data. Persistence should work on all browsers where NewDB works. Also, keep in mind that `localStorage` has size constraints, so it's probably a good idea to set recurring compaction every 2-5 minutes to save on space if your client app needs a lot of updates and deletes. See <a href="#compacting-the-database">database compaction</a> for more details on the append-only format used by NewDB.
 
 **Browser persistence is still young! It has been tested on most major browsers but please report any bugs you find**
 
 
 ## Performance
 ### Speed
-NeDB is not intended to be a replacement of large-scale databases such as MongoDB, and as such was not designed for speed. That said, it is still pretty fast on the expected datasets, especially if you use indexing. On a typical, not-so-fast dev machine, for a collection containing 10,000 documents, with indexing:  
+NewDB is not intended to be a replacement of large-scale databases such as MongoDB, and as such was not designed for speed. That said, it is still pretty fast on the expected datasets, especially if you use indexing. On a typical, not-so-fast dev machine, for a collection containing 10,000 documents, with indexing:  
 * Insert: **10,680 ops/s**
 * Find: **43,290 ops/s**
 * Update: **8,000 ops/s**
@@ -688,8 +691,8 @@ expected kind of datasets (20MB for 10,000 2KB documents).
 * <a href="https://github.com/louischatriot/connect-nedb-session"
   target="_blank">connect-nedb-session</a> is a session store for
 Connect and Express, backed by nedb
-* If you mostly use NeDB for logging purposes and don't want the memory footprint of your application to grow too large, you can use <a href="https://github.com/louischatriot/nedb-logger" target="_blank">NeDB Logger</a> to insert documents in a NeDB-readable database
-* If you've outgrown NeDB, switching to MongoDB won't be too hard as it is the same API. Use <a href="https://github.com/louischatriot/nedb-to-mongodb" target="_blank">this utility</a> to transfer the data from a NeDB database to a MongoDB collection
+* If you mostly use NewDB for logging purposes and don't want the memory footprint of your application to grow too large, you can use <a href="https://github.com/louischatriot/nedb-logger" target="_blank">NeDB Logger</a> to insert documents in a NewDB-readable database
+* If you've outgrown NewDB, switching to MongoDB won't be too hard as it is the same API. Use <a href="https://github.com/louischatriot/nedb-to-mongodb" target="_blank">this utility</a> to transfer the data from a NeDB database to a MongoDB collection (note: does not support the additional NewDB features)
 * An ODM for NeDB: <a href="https://github.com/scottwrobinson/camo" target="_blank">Camo</a>
 
 
@@ -699,10 +702,6 @@ If you report a bug, thank you! That said for the process to be manageable pleas
 * It should use assertions to showcase the expected vs actual behavior and be hysteresis-proof. It's quite simple in fact, see this example: https://gist.github.com/louischatriot/220cf6bd29c7de06a486
 * Simplify as much as you can. Strip all your application-specific code. Most of the time you will see that there is no bug but an error in your code :)
 * 50 lines max. If you need more, read the above point and rework your bug report. If you're **really** convinced you need more, please explain precisely in the issue.
-
-### Bitcoins
-You don't have time? You can support NeDB by sending bitcoins to this address: 1dDZLnWpBbodPiN8sizzYrgaz5iahFyb1
-
 
 ## License 
 

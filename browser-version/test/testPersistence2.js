@@ -5,7 +5,7 @@ function testsFailed () {
   document.getElementById("results").innerHTML = "TESTS FAILED";
 }
 
-var db = new Nedb({ filename: 'test', autoload: true });
+var db = new Newdb({ filename: 'test', autoload: true });
 db.find({}, function (err, docs) {
   if (docs.length !== 1) {
     console.log("Unexpected length of document database");

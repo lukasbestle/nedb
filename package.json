@@ -1,23 +1,27 @@
 {
-  "name": "nedb",
-  "version": "1.2.1",
+  "name": "newdb",
+  "version": "1.0.0",
   "author": {
-    "name": "Louis Chatriot",
-    "email": "louis.chatriot@gmail.com"
+    "name": "Lukas Bestle",
+    "email": "project-newdb@lukasbestle.com"
   },
   "contributors": [
+    "Lukas Bestle",
     "Louis Chatriot"
   ],
-  "description": "File-based embedded data store for node.js",
+  "description": "Fork of NeDB, the file-based embedded data store for node.js",
   "keywords": [
     "database",
     "datastore",
     "embedded"
   ],
-  "homepage": "https://github.com/louischatriot/nedb",
+  "homepage": "https://git.lukasbestle.com/newdb/newdb",
   "repository": {
     "type": "git",
-    "url": "git@github.com:louischatriot/nedb.git"
+    "url": "https://git.lukasbestle.com/newdb/newdb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lukasbestle/newdb/issues"
   },
   "dependencies": {
     "async": "0.2.10",

@@ -1,4 +1,4 @@
-(function(e){if("function"==typeof bootstrap)bootstrap("nedb",e);else if("object"==typeof exports)module.exports=e();else if("function"==typeof define&&define.amd)define(e);else if("undefined"!=typeof ses){if(!ses.ok())return;ses.makeNedb=e}else"undefined"!=typeof window?window.Nedb=e():global.Nedb=e()})(function(){var define,ses,bootstrap,module,exports;
+(function(e){if("function"==typeof bootstrap)bootstrap("newdb",e);else if("object"==typeof exports)module.exports=e();else if("function"==typeof define&&define.amd)define(e);else if("undefined"!=typeof ses){if(!ses.ok())return;ses.makeNewdb=e}else"undefined"!=typeof window?window.Newdb=e():global.Newdb=e()})(function(){var define,ses,bootstrap,module,exports;
 return (function(e,t,n){function i(n,s){if(!t[n]){if(!e[n]){var o=typeof require=="function"&&require;if(!s&&o)return o(n,!0);if(r)return r(n,!0);throw new Error("Cannot find module '"+n+"'")}var u=t[n]={exports:{}};e[n][0].call(u.exports,function(t){var r=e[n][1][t];return i(r?r:t)},u,u.exports)}return t[n].exports}var r=typeof require=="function"&&require;for(var s=0;s<n.length;s++)i(n[s]);return i})({1:[function(require,module,exports){
 var process=require("__browserify_process");if (!process.EventEmitter) process.EventEmitter = function () {};
 
@@ -1065,6 +1065,7 @@ var customUtils = require('./customUtils')
  * @param {Boolean} options.autoload Optional, defaults to false
  * @param {Function} options.onload Optional, if autoload is used this will be called after the load database with the error object as parameter. If you don't pass it the error will be thrown
  * @param {Function} options.afterSerialization and options.beforeDeserialization Optional, serialization hooks
+ * @param {Function/String} options.firstLine Optional, setter for the first line of the datastore file
  * @param {Number} options.corruptAlertThreshold Optional, threshold after which an alert is thrown if too much data is corrupt
  */
 function Datastore (options) {
@@ -1093,6 +1094,7 @@ function Datastore (options) {
   this.persistence = new Persistence({ db: this, nodeWebkitAppName: options.nodeWebkitAppName
                                       , afterSerialization: options.afterSerialization
                                       , beforeDeserialization: options.beforeDeserialization
+                                      , firstLine: options.firstLine
                                       , corruptAlertThreshold: options.corruptAlertThreshold
                                       });
 
@@ -1113,6 +1115,30 @@ function Datastore (options) {
     if (err) { throw err; }
   }); }
 }
+
+
+/**
+ * Get the first line containing metadata from the datastore file
+ * IMPORTANT: This method should only be used if you need the first
+ * line of the file *before* creating an instance of Datastore.
+ * If you already have an instance, please use the instance method
+ * with the same name (see below).
+ * 
+ * @param {String} filename Path to the datastore file
+ * @param {Function} cb Callback, signature: err, firstLine
+ */
+Datastore.getFirstLine = function (filename, cb) {
+  return Persistence.getFirstLine(filename, cb);
+};
+
+
+/**
+ * Get the first line containing metadata from the datastore file
+ * @param {Function} cb Callback, signature: err, firstLine
+ */
+Datastore.prototype.getFirstLine = function (cb) {
+  return this.persistence.getFirstLine(cb);
+};
 
 
 /**
@@ -1992,13 +2018,23 @@ function append (array, toAppend) {
  * @return {Array of documents}
  */
 Index.prototype.getMatching = function (value) {
-  var res, self = this;
+  var self = this;
 
   if (!util.isArray(value)) {
     return this.tree.search(value);
   } else {
-    res = [];
-    value.forEach(function (v) { append(res, self.getMatching(v)); });
+    var _res = {}, res = [];
+
+    value.forEach(function (v) {
+      self.getMatching(v).forEach(function (doc) {
+        _res[doc._id] = doc;
+      });
+    });
+
+    Object.keys(_res).forEach(function (_id) {
+      res.push(_res[_id]);
+    });
+
     return res;
   }
 };
@@ -2451,12 +2487,13 @@ function modify (obj, updateQuery) {
 
       if (!modifierFunctions[m]) { throw "Unknown modifier " + m; }
 
-      try {
-        keys = Object.keys(updateQuery[m]);
-      } catch (e) {
+      // Can't rely on Object.keys throwing on non objects since ES6{
+      // Not 100% satisfying as non objects can be interpreted as objects but no false negatives so we can live with it
+      if (typeof updateQuery[m] !== 'object') {
         throw "Modifier " + m + "'s argument must be an object";
       }
 
+      keys = Object.keys(updateQuery[m]);
       keys.forEach(function (k) {
         modifierFunctions[m](newDoc, k, updateQuery[m][k]);
       });
@@ -2848,10 +2885,10 @@ function Persistence (options) {
 
   // After serialization and before deserialization hooks with some basic sanity checks
   if (options.afterSerialization && !options.beforeDeserialization) {
-    throw "Serialization hook defined but deserialization hook undefined, cautiously refusing to start NeDB to prevent dataloss";
+    throw "Serialization hook defined but deserialization hook undefined, cautiously refusing to start NewDB to prevent dataloss";
   }
   if (!options.afterSerialization && options.beforeDeserialization) {
-    throw "Serialization hook undefined but deserialization hook defined, cautiously refusing to start NeDB to prevent dataloss";
+    throw "Serialization hook undefined but deserialization hook defined, cautiously refusing to start NewDB to prevent dataloss";
   }
   this.afterSerialization = options.afterSerialization || function (s) { return s; };
   this.beforeDeserialization = options.beforeDeserialization || function (s) { return s; };
@@ -2859,10 +2896,15 @@ function Persistence (options) {
     for (j = 0; j < 10; j += 1) {
       randomString = customUtils.uid(i);
       if (this.beforeDeserialization(this.afterSerialization(randomString)) !== randomString) {
-        throw "beforeDeserialization is not the reverse of afterSerialization, cautiously refusing to start NeDB to prevent dataloss";
+        throw "beforeDeserialization is not the reverse of afterSerialization, cautiously refusing to start NewDB to prevent dataloss";
       }
     }
   }
+  
+  if (options.firstLine && typeof options.firstLine !== 'function' && typeof options.firstLine !== 'string') {
+    throw "firstLine must be either a function or a string";
+  }
+  this.firstLine = options.firstLine;
   
   // For NW apps, store data in the same directory where NW stores application data
   if (this.filename && options.nodeWebkitAppName) {
@@ -2930,8 +2972,31 @@ Persistence.getNWAppFilename = function (appName, relativeFilename) {
       break;
   }
 
-  return path.join(home, 'nedb-data', relativeFilename);
+  return path.join(home, 'newdb-data', relativeFilename);
 }
+
+
+/**
+ * Get the first line containing metadata from the datastore file
+ * IMPORTANT: This method should only be used if you need the first
+ * line of the file *before* creating an instance of Datastore.
+ * If you already have an instance, please use the instance method
+ * with the same name (see below).
+ * 
+ * @param {String} filename Path to the datastore file
+ * @param {Function} cb Callback, signature: err, firstLine
+ */
+Persistence.getFirstLine = function (filename, cb) {
+  // Create a temporary instance of Persistence for the instance method to work
+  var instance = new Persistence({
+    db: {
+      filename: filename,
+      inMemoryOnly: false
+    } 
+  });
+  
+  return instance.getFirstLine(cb);
+};
 
 
 /**
@@ -2947,6 +3012,12 @@ Persistence.prototype.persistCachedDatabase = function (cb) {
     ;
 
   if (this.inMemoryOnly) { return callback(null); } 
+
+  if (typeof this.firstLine === 'string') {
+    toPersist += this.firstLine + '\n';
+  } else if (typeof this.firstLine === 'function') {
+    toPersist += this.firstLine() + '\n';
+  }
 
   this.db.getAllData().forEach(function (doc) {
     toPersist += self.afterSerialization(model.serialize(doc)) + '\n';
@@ -2982,17 +3053,19 @@ Persistence.prototype.persistCachedDatabase = function (cb) {
 
 /**
  * Queue a rewrite of the datafile
+ * @param {Function} cb Optional callback, signature: err
  */
-Persistence.prototype.compactDatafile = function () {
-  this.db.executor.push({ this: this, fn: this.persistCachedDatabase, arguments: [] });
+Persistence.prototype.compactDatafile = function (cb) {
+  this.db.executor.push({ this: this, fn: this.persistCachedDatabase, arguments: [cb] });
 };
 
 
 /**
  * Set automatic compaction every interval ms
  * @param {Number} interval in milliseconds, with an enforced minimum of 5 seconds
+ * @param {Function} cb Optional callback, signature: err
  */
-Persistence.prototype.setAutocompactionInterval = function (interval) {
+Persistence.prototype.setAutocompactionInterval = function (interval, cb) {
   var self = this
     , minInterval = 5000
     , realInterval = Math.max(interval || 0, minInterval)
@@ -3001,7 +3074,7 @@ Persistence.prototype.setAutocompactionInterval = function (interval) {
   this.stopAutocompaction();
 
   this.autocompactionIntervalId = setInterval(function () {
-    self.compactDatafile();
+    self.compactDatafile(cb);
   }, realInterval);
 };
 
@@ -3054,6 +3127,11 @@ Persistence.prototype.treatRawData = function (rawData) {
     , corruptItems = -1   // Last line of every data file is usually blank so not really corrupt
     ;
     
+  if (this.firstLine) {
+    // First line is metadata, don't parse as document
+    data.shift();
+  }
+  
   for (i = 0; i < data.length; i += 1) {
     var doc;
     
@@ -3077,7 +3155,7 @@ Persistence.prototype.treatRawData = function (rawData) {
     
   // A bit lenient on corruption
   if (data.length > 0 && corruptItems / data.length > this.corruptAlertThreshold) {
-    throw "More than 10% of the data file is corrupt, the wrong beforeDeserialization hook may be used. Cautiously refusing to start NeDB to prevent dataloss"
+    throw "More than 10% of the data file is corrupt, the wrong beforeDeserialization hook may be used. Cautiously refusing to start NewDB to prevent dataloss"
   }
 
   Object.keys(dataById).forEach(function (k) {
@@ -3172,6 +3250,32 @@ Persistence.prototype.loadDatabase = function (cb) {
 };
 
 
+/**
+ * Get the first line containing metadata from the datastore file
+ * @param {Function} cb Callback, signature: err, firstLine
+ */
+Persistence.prototype.getFirstLine = function (cb) {
+  var self = this;
+
+  // This method doesn't make any sense without a callback
+  if(!cb) return;
+
+  // In-memory only datastore
+  if (self.inMemoryOnly) { return cb(null, ''); }
+
+  Persistence.ensureDirectoryExists(path.dirname(self.filename), function (err) {
+    self.ensureDatafileIntegrity(function (exists) {
+      storage.readFile(self.filename, 'utf8', function (err, rawData) {
+        if (err) { return cb(err); }
+        
+        // Only return first line of the file
+        return cb(null, rawData.split('\n')[0]);
+      });
+    });
+  });
+};
+
+
 // Interface
 module.exports = Persistence;
 
@@ -3181,14 +3285,14 @@ module.exports = Persistence;
  * For a Node.js/Node Webkit database it's the file system
  * For a browser-side database it's localStorage when supported
  *
- * This version is the Node.js/Node Webkit version
+ * This version is the browser version
  */
 
 
 
 function exists (filename, callback) {
   // In this specific case this always answers that the file doesn't exist
-  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NeDB!"); return callback(); }
+  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NewDB!"); return callback(); }
 
   if (localStorage.getItem(filename) !== null) {
     return callback(true);
@@ -3199,7 +3303,7 @@ function exists (filename, callback) {
 
 
 function rename (filename, newFilename, callback) {
-  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NeDB!"); return callback(); }
+  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NewDB!"); return callback(); }
 
   if (localStorage.getItem(filename) === null) {
     localStorage.removeItem(newFilename);
@@ -3213,7 +3317,7 @@ function rename (filename, newFilename, callback) {
 
 
 function writeFile (filename, contents, options, callback) {
-  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NeDB!"); return callback(); }
+  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NewDB!"); return callback(); }
   
   // Options do not matter in browser setup
   if (typeof options === 'function') { callback = options; }
@@ -3224,7 +3328,7 @@ function writeFile (filename, contents, options, callback) {
 
 
 function appendFile (filename, toAppend, options, callback) {
-  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NeDB!"); return callback(); }
+  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NewDB!"); return callback(); }
   
   // Options do not matter in browser setup
   if (typeof options === 'function') { callback = options; }
@@ -3238,7 +3342,7 @@ function appendFile (filename, toAppend, options, callback) {
 
 
 function readFile (filename, options, callback) {
-  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NeDB!"); return callback(); }
+  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NewDB!"); return callback(); }
   
   // Options do not matter in browser setup
   if (typeof options === 'function') { callback = options; }
@@ -3249,7 +3353,7 @@ function readFile (filename, options, callback) {
 
 
 function unlink (filename, callback) {
-  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NeDB!"); return callback(); }
+  if (typeof localStorage === 'undefined') { console.log("WARNING - This browser doesn't support localStorage, no data will be saved in NewDB!"); return callback(); }
 
   localStorage.removeItem(filename);
   return callback();

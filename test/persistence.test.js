@@ -1049,8 +1049,8 @@ describe('Persistence', function () {
   
     // This test is a bit complicated since it depends on the time I/O actions take to execute
     // That depends on the machine and the load on the machine when the tests are run
-    // It is timed for my machine with nothing else running but may not work as expected on others (it will not fail but may not be a proof)
-    // Every new version of NeDB passes it on my machine before rtelease
+    // It is timed for Louis' machine with nothing else running but may not work as expected on others (it will not fail but may not be a proof)
+    // Every new version of NewDB passes it on my machine before release
     it('If system crashes during a loadDatabase, the former version is not lost', function (done) {
       var cp, N = 150000, toWrite = "", i;
       
