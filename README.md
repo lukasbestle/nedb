@@ -8,7 +8,7 @@
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
 
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.2.1**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.3.0**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
