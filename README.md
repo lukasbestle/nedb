@@ -8,7 +8,7 @@
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
 
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.3.0**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.4.0**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
@@ -649,29 +649,26 @@ Datastore.getFirstLine('path/to/datafile', function (err, firstLine) {
 
 
 ## Browser version
-As of v0.8.0, you can use NewDB in the browser! You can find it and its minified version in the repository, in the `browser-version/out` directory. You only need to require `newdb.js` or `newdb.min.js` in your HTML file and the global object `Newdb` can be used right away, with the same API as the server version:
+The browser version and its minified counterpart are in the `browser-version/out` directory. You only need to require `newdb.js` or `newdb.min.js` in your HTML file and the global object `Newdb` can be used right away, with the same API as the server version:
 
 ```
 <script src="newdb.min.js"></script>
 <script>
   var db = new Newdb();   // Create an in-memory only datastore
   
-  db.insert({ planet: 'Earth' });
-  db.insert({ planet: 'Mars' });
-
-  db.find({}, function (err, docs) {
-    // docs contains the two planets Earth and Mars
+  db.insert({ planet: 'Earth' }, function (err) {
+   db.find({}, function (err, docs) {
+     // docs contains the two planets Earth and Mars
+   });
   });
 </script>
 ```
 
-It has been tested and is compatible with Chrome, Safari, Firefox, IE 10, IE 9. Please open an issue if you need compatibility with IE 8/IE 7, I think it will need some work and am not sure it is needed, since most complex webapplications - the ones that would need NewDB - only work on modern browsers anyway. To launch the tests, simply open the file `browser-version/test/index.html` in a browser and you'll see the results of the tests for this browser.
+If you specify a `filename`, the database will be persistent, and automatically select the best storage method available (IndexedDB, WebSQL or localStorage) depending on the browser. In most cases that means a lot of data can be stored, typically in hundreds of MB. **WARNING**: the storage system changed between v1.1 and v1.2 and is NOT back-compatible! Your application needs to resync client-side when you upgrade NewDB.
 
-If you fork and modify newdb, you can build the browser version from the sources, the build script is `browser-version/build.js`.
+NewDB is compatible with all major browsers: Chrome, Safari, Firefox, IE9+. Tests are in the `browser-version/test` directory (files `index.html` and `testPersistence.html`).
 
-As of v0.11, NewDB is also persistent on the browser. To use this, simply create the collection with the `filename` option which will be the name of the `localStorage` variable storing data. Persistence should work on all browsers where NewDB works. Also, keep in mind that `localStorage` has size constraints, so it's probably a good idea to set recurring compaction every 2-5 minutes to save on space if your client app needs a lot of updates and deletes. See <a href="#compacting-the-database">database compaction</a> for more details on the append-only format used by NewDB.
-
-**Browser persistence is still young! It has been tested on most major browsers but please report any bugs you find**
+If you fork and modify NewDB, you can build the browser version from the sources, the build script is `browser-version/build.js`.
 
 
 ## Performance
