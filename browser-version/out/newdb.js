@@ -1065,7 +1065,7 @@ var customUtils = require('./customUtils')
  *                                            Node Webkit stores application data such as cookies and local storage (the best place to store data in my opinion)
  * @param {Boolean} options.autoload Optional, defaults to false
  * @param {Function} options.onload Optional, if autoload is used this will be called after the load database with the error object as parameter. If you don't pass it the error will be thrown
- * @param {Function} options.afterSerialization and options.beforeDeserialization Optional, serialization hooks
+ * @param {Function} options.afterSerialization/options.beforeDeserialization Optional, serialization hooks
  * @param {Function/String} options.firstLine Optional, setter for the first line of the datastore file
  * @param {Number} options.corruptAlertThreshold Optional, threshold after which an alert is thrown if too much data is corrupt
  */
@@ -3127,7 +3127,7 @@ Persistence.prototype.treatRawData = function (rawData) {
 
   // A bit lenient on corruption
   if (data.length > 0 && corruptItems / data.length > this.corruptAlertThreshold) {
-    throw "More than 10% of the data file is corrupt, the wrong beforeDeserialization hook may be used. Cautiously refusing to start NewDB to prevent dataloss"
+    throw "More than " + Math.floor(100 * this.corruptAlertThreshold) + "% of the data file is corrupt, the wrong beforeDeserialization hook may be used. Cautiously refusing to start NewDB to prevent dataloss"
   }
 
   Object.keys(dataById).forEach(function (k) {
