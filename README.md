@@ -10,7 +10,7 @@
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
 
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.4.2**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.5.0**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
@@ -28,7 +28,7 @@ bower install newdb   // For the browser versions, which will be in browser-vers
 ```
 
 ## API
-It's a subset of MongoDB's API (the most used operations).  
+It's a subset of MongoDB's API (the most used operations).
 
 * <a href="#creatingloading-a-database">Creating/loading a database</a>
 * <a href="#persistence">Persistence</a>
@@ -48,7 +48,7 @@ It's a subset of MongoDB's API (the most used operations).
 * <a href="#browser-version">Browser version</a>
 
 ### Creating/loading a database
-You can use NewDB as an in-memory only datastore or as a persistent datastore. One datastore is the equivalent of a MongoDB collection. The constructor is used as follows `new Datastore(options)` where `options` is an object with the following fields:  
+You can use NewDB as an in-memory only datastore or as a persistent datastore. One datastore is the equivalent of a MongoDB collection. The constructor is used as follows `new Datastore(options)` where `options` is an object with the following fields:
 
 * `filename` (optional): path to the file where the data is persisted. If left blank, the datastore is automatically considered in-memory only. It cannot end with a `~` which is used in the temporary files NewDB uses to perform crash-safe writes
 * `inMemoryOnly` (optional, defaults to false): as the name implies.
@@ -117,13 +117,13 @@ You can also set automatic compaction at regular intervals with `yourDatabase.pe
 
 Keep in mind that compaction takes a bit of time (not too much: 130ms for 50k records on a typical development machine) and no other operation can happen when it does, so most projects actually don't need to use it.
 
-Physical persistence works similarly to major databases: compaction forces the OS to physically flush data to disk, while appends to the data file let the OS handle this. That guarantees that a server crash can never cause complete data loss, at most one or two documents, while preserving performance.
+Durability works similarly to major databases: compaction forces the OS to physically flush data to disk, while appends to the data file do not (the OS is responsible for flushing the data). That guarantees that a server crash can never cause complete data loss, while preserving performance. The worst that can happen is a crash between two syncs, causing a loss of all data between the two syncs. Usually syncs are 30 seconds appart so that's at most 30 seconds of data. <a href="http://oldblog.antirez.com/post/redis-persistence-demystified.html" target="_blank">This post by Antirez on Redis persistence</a> explains this in more details, NewDB being very close to Redis AOF persistence with `appendfsync` option set to `no`.
 
 
 ### Inserting documents
 The native types are `String`, `Number`, `Boolean`, `Date` and `null`. You can also use
 arrays and subdocuments (objects). If a field is `undefined`, it will not be saved (this is different from 
-MongoDB which transforms `undefined` in `null`, something I find counter-intuitive).  
+MongoDB which transforms `undefined` in `null`, something I find counter-intuitive).
 
 If the document does not contain an `_id` field, NewDB will automatically generated one for you (a 16-characters alphanumerical string). The `_id` of a document, once set, cannot be modified.
 
