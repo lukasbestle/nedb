@@ -856,7 +856,7 @@ Cursor.prototype.project = function (candidates) {
   // Check for consistency
   keys = Object.keys(this._projection);
   keys.forEach(function (k) {
-    if (action !== undefined && self._projection[k] !== action) { throw "Can't both keep and omit fields except for _id"; }
+    if (action !== undefined && self._projection[k] !== action) { throw new Error("Can't both keep and omit fields except for _id"); }
     action = self._projection[k];
   });
 
@@ -2112,11 +2112,11 @@ function checkKey (k, v) {
   }
 
   if (k[0] === '$' && !(k === '$$date' && typeof v === 'number') && !(k === '$$deleted' && v === true) && !(k === '$$indexCreated') && !(k === '$$indexRemoved')) {
-    throw 'Field names cannot begin with the $ character';
+    throw new Error('Field names cannot begin with the $ character');
   }
 
   if (k.indexOf('.') !== -1) {
-    throw 'Field names cannot contain a .';
+    throw new Error('Field names cannot contain a .');
   }
 }
 
@@ -2349,11 +2349,11 @@ lastStepModifierFunctions.$push = function (obj, field, value) {
   // Create the array if it doesn't exist
   if (!obj.hasOwnProperty(field)) { obj[field] = []; }
 
-  if (!util.isArray(obj[field])) { throw "Can't $push an element on non-array values"; }
+  if (!util.isArray(obj[field])) { throw new Error("Can't $push an element on non-array values"); }
 
   if (value !== null && typeof value === 'object' && value.$each) {
-    if (Object.keys(value).length > 1) { throw "Can't use another field in conjunction with $each"; }
-    if (!util.isArray(value.$each)) { throw "$each requires an array value"; }
+    if (Object.keys(value).length > 1) { throw new Error("Can't use another field in conjunction with $each"); }
+    if (!util.isArray(value.$each)) { throw new Error("$each requires an array value"); }
 
     value.$each.forEach(function (v) {
       obj[field].push(v);
@@ -2375,11 +2375,11 @@ lastStepModifierFunctions.$addToSet = function (obj, field, value) {
   // Create the array if it doesn't exist
   if (!obj.hasOwnProperty(field)) { obj[field] = []; }
 
-  if (!util.isArray(obj[field])) { throw "Can't $addToSet an element on non-array values"; }
+  if (!util.isArray(obj[field])) { throw new Error("Can't $addToSet an element on non-array values"); }
 
   if (value !== null && typeof value === 'object' && value.$each) {
-    if (Object.keys(value).length > 1) { throw "Can't use another field in conjunction with $each"; }
-    if (!util.isArray(value.$each)) { throw "$each requires an array value"; }
+    if (Object.keys(value).length > 1) { throw new Error("Can't use another field in conjunction with $each"); }
+    if (!util.isArray(value.$each)) { throw new Error("$each requires an array value"); }
 
     value.$each.forEach(function (v) {
       lastStepModifierFunctions.$addToSet(obj, field, v);
@@ -2397,8 +2397,8 @@ lastStepModifierFunctions.$addToSet = function (obj, field, value) {
  * Remove the first or last element of an array
  */
 lastStepModifierFunctions.$pop = function (obj, field, value) {
-  if (!util.isArray(obj[field])) { throw "Can't $pop an element from non-array values"; }
-  if (typeof value !== 'number') { throw value + " isn't an integer, can't use it with $pop"; }
+  if (!util.isArray(obj[field])) { throw new Error("Can't $pop an element from non-array values"); }
+  if (typeof value !== 'number') { throw new Error(value + " isn't an integer, can't use it with $pop"); }
   if (value === 0) { return; }
 
   if (value > 0) {
@@ -2415,7 +2415,7 @@ lastStepModifierFunctions.$pop = function (obj, field, value) {
 lastStepModifierFunctions.$pull = function (obj, field, value) {
   var arr, i;
 
-  if (!util.isArray(obj[field])) { throw "Can't $pull an element from non-array values"; }
+  if (!util.isArray(obj[field])) { throw new Error("Can't $pull an element from non-array values"); }
 
   arr = obj[field];
   for (i = arr.length - 1; i >= 0; i -= 1) {
@@ -2430,13 +2430,13 @@ lastStepModifierFunctions.$pull = function (obj, field, value) {
  * Increment a numeric field's value
  */
 lastStepModifierFunctions.$inc = function (obj, field, value) {
-  if (typeof value !== 'number') { throw value + " must be a number"; }
+  if (typeof value !== 'number') { throw new Error(value + " must be a number"); }
 
   if (typeof obj[field] !== 'number') {
     if (!_.has(obj, field)) {
       obj[field] = value;
     } else {
-      throw "Don't use the $inc modifier on non-number fields";
+      throw new Error("Don't use the $inc modifier on non-number fields");
     }
   } else {
     obj[field] += value;
@@ -2473,10 +2473,10 @@ function modify (obj, updateQuery) {
     , newDoc, modifiers
     ;
 
-  if (keys.indexOf('_id') !== -1 && updateQuery._id !== obj._id) { throw "You cannot change a document's _id"; }
+  if (keys.indexOf('_id') !== -1 && updateQuery._id !== obj._id) { throw new Error("You cannot change a document's _id"); }
 
   if (dollarFirstChars.length !== 0 && dollarFirstChars.length !== firstChars.length) {
-    throw "You cannot mix modifiers and normal fields";
+    throw new Error("You cannot mix modifiers and normal fields");
   }
 
   if (dollarFirstChars.length === 0) {
@@ -2490,12 +2490,12 @@ function modify (obj, updateQuery) {
     modifiers.forEach(function (m) {
       var keys;
 
-      if (!modifierFunctions[m]) { throw "Unknown modifier " + m; }
+      if (!modifierFunctions[m]) { throw new Error("Unknown modifier " + m); }
 
       // Can't rely on Object.keys throwing on non objects since ES6{
       // Not 100% satisfying as non objects can be interpreted as objects but no false negatives so we can live with it
       if (typeof updateQuery[m] !== 'object') {
-        throw "Modifier " + m + "'s argument must be an object";
+        throw new Error("Modifier " + m + "'s argument must be an object");
       }
 
       keys = Object.keys(updateQuery[m]);
@@ -2508,7 +2508,7 @@ function modify (obj, updateQuery) {
   // Check result is valid and return it
   checkObject(newDoc);
 
-  if (obj._id !== newDoc._id) { throw "You can't change a document's _id"; }
+  if (obj._id !== newDoc._id) { throw new Error("You can't change a document's _id"); }
   return newDoc;
 };
 
@@ -2633,7 +2633,7 @@ comparisonFunctions.$ne = function (a, b) {
 comparisonFunctions.$in = function (a, b) {
   var i;
 
-  if (!util.isArray(b)) { throw "$in operator called with a non-array"; }
+  if (!util.isArray(b)) { throw new Error("$in operator called with a non-array"); }
 
   for (i = 0; i < b.length; i += 1) {
     if (areThingsEqual(a, b[i])) { return true; }
@@ -2643,13 +2643,13 @@ comparisonFunctions.$in = function (a, b) {
 };
 
 comparisonFunctions.$nin = function (a, b) {
-  if (!util.isArray(b)) { throw "$nin operator called with a non-array"; }
+  if (!util.isArray(b)) { throw new Error("$nin operator called with a non-array"); }
 
   return !comparisonFunctions.$in(a, b);
 };
 
 comparisonFunctions.$regex = function (a, b) {
-  if (!util.isRegExp(b)) { throw "$regex operator called with non regular expression"; }
+  if (!util.isRegExp(b)) { throw new Error("$regex operator called with non regular expression"); }
 
   if (typeof a !== 'string') {
     return false
@@ -2675,7 +2675,7 @@ comparisonFunctions.$exists = function (value, exists) {
 // Specific to arrays
 comparisonFunctions.$size = function (obj, value) {
     if (!util.isArray(obj)) { return false; }
-    if (value % 1 !== 0) { throw "$size operator called without an integer"; }
+    if (value % 1 !== 0) { throw new Error("$size operator called without an integer"); }
 
     return (obj.length == value);
 };
@@ -2690,7 +2690,7 @@ arrayComparisonFunctions.$size = true;
 logicalOperators.$or = function (obj, query) {
   var i;
 
-  if (!util.isArray(query)) { throw "$or operator used without an array"; }
+  if (!util.isArray(query)) { throw new Error("$or operator used without an array"); }
 
   for (i = 0; i < query.length; i += 1) {
     if (match(obj, query[i])) { return true; }
@@ -2708,7 +2708,7 @@ logicalOperators.$or = function (obj, query) {
 logicalOperators.$and = function (obj, query) {
   var i;
 
-  if (!util.isArray(query)) { throw "$and operator used without an array"; }
+  if (!util.isArray(query)) { throw new Error("$and operator used without an array"); }
 
   for (i = 0; i < query.length; i += 1) {
     if (!match(obj, query[i])) { return false; }
@@ -2736,10 +2736,10 @@ logicalOperators.$not = function (obj, query) {
 logicalOperators.$where = function (obj, fn) {
   var result;
 
-  if (!_.isFunction(fn)) { throw "$where operator used without a function"; }
+  if (!_.isFunction(fn)) { throw new Error("$where operator used without a function"); }
 
   result = fn.call(obj);
-  if (!_.isBoolean(result)) { throw "$where function must return boolean"; }
+  if (!_.isBoolean(result)) { throw new Error("$where function must return boolean"); }
 
   return result;
 };
@@ -2767,7 +2767,7 @@ function match (obj, query) {
     queryValue = query[queryKey];
 
     if (queryKey[0] === '$') {
-      if (!logicalOperators[queryKey]) { throw "Unknown logical operator " + queryKey; }
+      if (!logicalOperators[queryKey]) { throw new Error("Unknown logical operator " + queryKey); }
       if (!logicalOperators[queryKey](obj, queryValue)) { return false; }
     } else {
       if (!matchQueryPart(obj, queryKey, queryValue)) { return false; }
@@ -2811,13 +2811,13 @@ function matchQueryPart (obj, queryKey, queryValue, treatObjAsValue) {
     dollarFirstChars = _.filter(firstChars, function (c) { return c === '$'; });
 
     if (dollarFirstChars.length !== 0 && dollarFirstChars.length !== firstChars.length) {
-      throw "You cannot mix operators and normal fields";
+      throw new Error("You cannot mix operators and normal fields");
     }
 
     // queryValue is an object of this form: { $comparisonOperator1: value1, ... }
     if (dollarFirstChars.length > 0) {
       for (i = 0; i < keys.length; i += 1) {
-        if (!comparisonFunctions[keys[i]]) { throw "Unknown comparison function " + keys[i]; }
+        if (!comparisonFunctions[keys[i]]) { throw new Error("Unknown comparison function " + keys[i]); }
 
         if (!comparisonFunctions[keys[i]](objValue, queryValue[keys[i]])) { return false; }
       }
@@ -2880,15 +2880,15 @@ function Persistence (options) {
   this.corruptAlertThreshold = options.corruptAlertThreshold !== undefined ? options.corruptAlertThreshold : 0.1;
 
   if (!this.inMemoryOnly && this.filename && this.filename.charAt(this.filename.length - 1) === '~') {
-    throw "The datafile name can't end with a ~, which is reserved for crash safe backup files";
+    throw new Error("The datafile name can't end with a ~, which is reserved for crash safe backup files");
   }
 
   // After serialization and before deserialization hooks with some basic sanity checks
   if (options.afterSerialization && !options.beforeDeserialization) {
-    throw "Serialization hook defined but deserialization hook undefined, cautiously refusing to start NewDB to prevent dataloss";
+    throw new Error("Serialization hook defined but deserialization hook undefined, cautiously refusing to start NewDB to prevent dataloss");
   }
   if (!options.afterSerialization && options.beforeDeserialization) {
-    throw "Serialization hook undefined but deserialization hook defined, cautiously refusing to start NewDB to prevent dataloss";
+    throw new Error("Serialization hook undefined but deserialization hook defined, cautiously refusing to start NewDB to prevent dataloss");
   }
   this.afterSerialization = options.afterSerialization || function (s) { return s; };
   this.beforeDeserialization = options.beforeDeserialization || function (s) { return s; };
@@ -2896,7 +2896,7 @@ function Persistence (options) {
     for (j = 0; j < 10; j += 1) {
       randomString = customUtils.uid(i);
       if (this.beforeDeserialization(this.afterSerialization(randomString)) !== randomString) {
-        throw "beforeDeserialization is not the reverse of afterSerialization, cautiously refusing to start NewDB to prevent dataloss";
+        throw new Error("beforeDeserialization is not the reverse of afterSerialization, cautiously refusing to start NewDB to prevent dataloss");
       }
     }
   }
@@ -2945,21 +2945,21 @@ Persistence.getNWAppFilename = function (appName, relativeFilename) {
     case 'win32':
     case 'win64':
       home = process.env.LOCALAPPDATA || process.env.APPDATA;
-      if (!home) { throw "Couldn't find the base application data folder"; }
+      if (!home) { throw new Error("Couldn't find the base application data folder"); }
       home = path.join(home, appName);
       break;
     case 'darwin':
       home = process.env.HOME;
-      if (!home) { throw "Couldn't find the base application data directory"; }
+      if (!home) { throw new Error("Couldn't find the base application data directory"); }
       home = path.join(home, 'Library', 'Application Support', appName);
       break;
     case 'linux':
       home = process.env.HOME;
-      if (!home) { throw "Couldn't find the base application data directory"; }
+      if (!home) { throw new Error("Couldn't find the base application data directory"); }
       home = path.join(home, '.config', appName);
       break;
     default:
-      throw "Can't use the Node Webkit relative path for platform " + process.platform;
+      throw new Error("Can't use the Node Webkit relative path for platform " + process.platform);
       break;
   }
 
@@ -3127,7 +3127,7 @@ Persistence.prototype.treatRawData = function (rawData) {
 
   // A bit lenient on corruption
   if (data.length > 0 && corruptItems / data.length > this.corruptAlertThreshold) {
-    throw "More than " + Math.floor(100 * this.corruptAlertThreshold) + "% of the data file is corrupt, the wrong beforeDeserialization hook may be used. Cautiously refusing to start NewDB to prevent dataloss"
+    throw new Error("More than " + Math.floor(100 * this.corruptAlertThreshold) + "% of the data file is corrupt, the wrong beforeDeserialization hook may be used. Cautiously refusing to start NewDB to prevent dataloss");
   }
 
   Object.keys(dataById).forEach(function (k) {
@@ -5333,7 +5333,7 @@ module.exports.defaultCheckValueEquality = defaultCheckValueEquality;
 },{}],18:[function(require,module,exports){
 var process=require("__browserify_process"),global=self;/*!
     localForage -- Offline Storage, Improved
-    Version 1.3.0
+    Version 1.3.1
     https://mozilla.github.io/localForage
     (c) 2013-2015 Mozilla, Apache License 2.0
 */
@@ -6734,7 +6734,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            dbInfo.db = dbContext.db = db;
 	            self._dbInfo = dbInfo;
 	            // Share the final connection amongst related localForages.
-	            for (var k in forages) {
+	            for (var k = 0; k < forages.length; k++) {
 	                var forage = forages[k];
 	                if (forage !== self) {
 	                    // Self is already up-to-date.
@@ -6928,10 +6928,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	            var dbInfo;
 	            self.ready().then(function () {
 	                dbInfo = self._dbInfo;
-	                return _checkBlobSupport(dbInfo.db);
-	            }).then(function (blobSupport) {
-	                if (!blobSupport && value instanceof Blob) {
-	                    return _encodeBlob(value);
+	                if (value instanceof Blob) {
+	                    return _checkBlobSupport(dbInfo.db).then(function (blobSupport) {
+	                        if (blobSupport) {
+	                            return value;
+	                        }
+	                        return _encodeBlob(value);
+	                    });
 	                }
 	                return value;
 	            }).then(function (value) {
