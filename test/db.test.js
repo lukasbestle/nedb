@@ -89,7 +89,7 @@ describe('Database', function () {
       db = new Datastore({ filename: autoDb, autoload: true, onload: onload })
 
       db.find({}, function (err, docs) {
-        done("Find should not be executed since autoload failed");
+        done(new Error("Find should not be executed since autoload failed"));
       });
     });
 
@@ -390,7 +390,7 @@ describe('Database', function () {
      *
      * Note: maybe using an in-memory only NewDB would give us an easier solution
      */
-    it('If the callback throws an uncaught execption, dont catch it inside findOne, this is userspace concern', function (done) {
+    it('If the callback throws an uncaught exception, do not catch it inside findOne, this is userspace concern', function (done) {
       var tryCount = 0
         , currentUncaughtExceptionHandlers = process.listeners('uncaughtException')
         , i
@@ -399,11 +399,13 @@ describe('Database', function () {
       process.removeAllListeners('uncaughtException');
 
       process.on('uncaughtException', function MINE (ex) {
+        process.removeAllListeners('uncaughtException');
+
         for (i = 0; i < currentUncaughtExceptionHandlers.length; i += 1) {
           process.on('uncaughtException', currentUncaughtExceptionHandlers[i]);
         }
 
-        ex.should.equal('SOME EXCEPTION');
+        ex.message.should.equal('SOME EXCEPTION');
         done();
       });
 
@@ -411,9 +413,9 @@ describe('Database', function () {
         d.findOne({ a : 5}, function (err, doc) {
           if (tryCount === 0) {
             tryCount += 1;
-            throw 'SOME EXCEPTION';
+            throw new Error('SOME EXCEPTION');
           } else {
-            done('Callback was called twice');
+            done(new Error('Callback was called twice'));
           }
         });
       });
@@ -1472,6 +1474,40 @@ describe('Database', function () {
             });
 
             done();
+          });
+        });
+      });
+    });
+
+    it("If options.returnUpdatedDocs is true, return all matched docs", function (done) {
+      d.insert([{ a: 4 }, { a: 5 }, { a: 6 }], function (err, docs) {
+        docs.length.should.equal(3);
+
+        d.update({ a: 7 }, { $set: { u: 1 } }, { multi: true, returnUpdatedDocs: true }, function (err, num, updatedDocs) {
+          num.should.equal(0);
+          updatedDocs.length.should.equal(0);
+
+          d.update({ a: 5 }, { $set: { u: 2 } }, { multi: true, returnUpdatedDocs: true }, function (err, num, updatedDocs) {
+            num.should.equal(1);
+            updatedDocs.length.should.equal(1);
+            updatedDocs[0].a.should.equal(5);
+            updatedDocs[0].u.should.equal(2);
+
+            d.update({ a: { $in: [4, 6] } }, { $set: { u: 3 } }, { multi: true, returnUpdatedDocs: true }, function (err, num, updatedDocs) {
+              num.should.equal(2);
+              updatedDocs.length.should.equal(2);
+              updatedDocs[0].u.should.equal(3);
+              updatedDocs[1].u.should.equal(3);
+              if (updatedDocs[0].a === 4) {
+                updatedDocs[0].a.should.equal(4);
+                updatedDocs[1].a.should.equal(6);
+              } else {
+                updatedDocs[0].a.should.equal(6);
+                updatedDocs[1].a.should.equal(4);
+              }
+
+              done();
+            });
           });
         });
       });

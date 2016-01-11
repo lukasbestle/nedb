@@ -1181,11 +1181,16 @@ Datastore.prototype.resetIndexes = function (newData) {
  * @param {Function} cb Optional callback, signature: err
  */
 Datastore.prototype.ensureIndex = function (options, cb) {
-  var callback = cb || function () {};
+  var err
+    , callback = cb || function () {};
 
   options = options || {};
 
-  if (!options.fieldName) { return callback({ missingFieldName: true }); }
+  if (!options.fieldName) {
+    err = new Error("Cannot create an index without a fieldName");
+    err.missingFieldName = true;
+    return callback(err);
+  }
   if (this.indexes[options.fieldName]) { return callback(null); }
 
   this.indexes[options.fieldName] = new Index(options);
@@ -1548,12 +1553,12 @@ Datastore.prototype.findOne = function (query, projection, callback) {
 
 /**
  * Update all docs matching query
- * For now, very naive implementation (recalculating the whole database)
  * @param {Object} query
  * @param {Object} updateQuery
  * @param {Object} options Optional options
  *                 options.multi If true, can update multiple documents (defaults to false)
  *                 options.upsert If true, document is inserted if the query doesn't match anything
+ *                 options.returnUpdatedDocs Defaults to false, if true return as third argument the array of updated matched documents (even if no change actually took place)
  * @param {Function} cb Optional callback, signature: err, numReplaced, upsert (set to true if the update was in fact an upsert)
  *
  * @api private Use Datastore.update which has the same signature
@@ -1607,9 +1612,9 @@ Datastore.prototype._update = function (query, updateQuery, options, cb) {
   }
   , function () {   // Perform the update
     var modifiedDoc
-	  , candidates = self.getCandidates(query)
-	  , modifications = []
-	  ;
+      , candidates = self.getCandidates(query)
+      , modifications = []
+      ;
 
     // Preparing update (if an error is thrown here neither the datafile nor
     // the in-memory indexes are affected)
@@ -1634,9 +1639,16 @@ Datastore.prototype._update = function (query, updateQuery, options, cb) {
     }
 
     // Update the datafile
-    self.persistence.persistNewState(_.pluck(modifications, 'newDoc'), function (err) {
+    var updatedDocs = _.pluck(modifications, 'newDoc');
+    self.persistence.persistNewState(updatedDocs, function (err) {
       if (err) { return callback(err); }
-      return callback(null, numReplaced);
+      if (!options.returnUpdatedDocs) {
+        return callback(null, numReplaced);
+      } else {
+        var updatedDocsDC = [];
+        updatedDocs.forEach(function (doc) { updatedDocsDC.push(model.deepCopy(doc)); });
+        return callback(null, numReplaced, updatedDocsDC);
+      }
     });
   }
   ]);
@@ -1797,7 +1809,7 @@ function projectForUnique (elt) {
   if (typeof elt === 'boolean') { return '$boolean' + elt; }
   if (typeof elt === 'number') { return '$number' + elt; }
   if (util.isArray(elt)) { return '$date' + elt.getTime(); }
-  
+
   return elt;   // Arrays and objects, will check for pointer equality
 }
 
@@ -2007,16 +2019,6 @@ Index.prototype.revertUpdate = function (oldDoc, newDoc) {
 };
 
 
-// Append all elements in toAppend to array
-function append (array, toAppend) {
-  var i;
-
-  for (i = 0; i < toAppend.length; i += 1) {
-    array.push(toAppend[i]);
-  }
-}
-
-
 /**
  * Get all documents in index whose key match value (if it is a Thing) or one of the elements of value (if it is an array of Things)
  * @param {Thing} value Value to match the key against
@@ -2026,7 +2028,7 @@ Index.prototype.getMatching = function (value) {
   var self = this;
 
   if (!util.isArray(value)) {
-    return this.tree.search(value);
+    return self.tree.search(value);
   } else {
     var _res = {}, res = [];
 
@@ -4354,14 +4356,14 @@ _AVLTree.prototype.checkHeightCorrect = function () {
 
   if (!this.hasOwnProperty('key')) { return; }   // Empty tree
 
-  if (this.left && this.left.height === undefined) { throw "Undefined height for node " + this.left.key; }
-  if (this.right && this.right.height === undefined) { throw "Undefined height for node " + this.right.key; }
-  if (this.height === undefined) { throw "Undefined height for node " + this.key; }
+  if (this.left && this.left.height === undefined) { throw new Error("Undefined height for node " + this.left.key); }
+  if (this.right && this.right.height === undefined) { throw new Error("Undefined height for node " + this.right.key); }
+  if (this.height === undefined) { throw new Error("Undefined height for node " + this.key); }
 
   leftH = this.left ? this.left.height : 0;
   rightH = this.right ? this.right.height : 0;
 
-  if (this.height !== 1 + Math.max(leftH, rightH)) { throw "Height constraint failed for node " + this.key; }
+  if (this.height !== 1 + Math.max(leftH, rightH)) { throw new Error("Height constraint failed for node " + this.key); }
   if (this.left) { this.left.checkHeightCorrect(); }
   if (this.right) { this.right.checkHeightCorrect(); }
 };
@@ -4382,7 +4384,7 @@ _AVLTree.prototype.balanceFactor = function () {
  * Check that the balance factors are all between -1 and 1
  */
 _AVLTree.prototype.checkBalanceFactors = function () {
-  if (Math.abs(this.balanceFactor()) > 1) { throw 'Tree is unbalanced at node ' + this.key; }
+  if (Math.abs(this.balanceFactor()) > 1) { throw new Error('Tree is unbalanced at node ' + this.key); }
 
   if (this.left) { this.left.checkBalanceFactors(); }
   if (this.right) { this.right.checkBalanceFactors(); }
@@ -4561,10 +4563,10 @@ _AVLTree.prototype.insert = function (key, value) {
     // Same key: no change in the tree structure
     if (currentNode.compareKeys(currentNode.key, key) === 0) {
       if (currentNode.unique) {
-        throw { message: "Can't insert key " + key + ", it violates the unique constraint"
-              , key: key
-              , errorType: 'uniqueViolated'
-              };
+        var err = new Error("Can't insert key " + key + ", it violates the unique constraint");
+        err.key = key;
+        err.errorType = 'uniqueViolated';
+        throw err;
       } else {
         currentNode.data.push(value);
       }
@@ -4845,7 +4847,7 @@ BinarySearchTree.prototype.checkNodeOrdering = function () {
   if (this.left) {
     this.left.checkAllNodesFullfillCondition(function (k) {
       if (self.compareKeys(k, self.key) >= 0) {
-        throw 'Tree with root ' + self.key + ' is not a binary search tree';
+        throw new Error('Tree with root ' + self.key + ' is not a binary search tree');
       }
     });
     this.left.checkNodeOrdering();
@@ -4854,7 +4856,7 @@ BinarySearchTree.prototype.checkNodeOrdering = function () {
   if (this.right) {
     this.right.checkAllNodesFullfillCondition(function (k) {
       if (self.compareKeys(k, self.key) <= 0) {
-        throw 'Tree with root ' + self.key + ' is not a binary search tree';
+        throw new Error('Tree with root ' + self.key + ' is not a binary search tree');
       }
     });
     this.right.checkNodeOrdering();
@@ -4867,12 +4869,12 @@ BinarySearchTree.prototype.checkNodeOrdering = function () {
  */
 BinarySearchTree.prototype.checkInternalPointers = function () {
   if (this.left) {
-    if (this.left.parent !== this) { throw 'Parent pointer broken for key ' + this.key; }
+    if (this.left.parent !== this) { throw new Error('Parent pointer broken for key ' + this.key); }
     this.left.checkInternalPointers();
   }
 
   if (this.right) {
-    if (this.right.parent !== this) { throw 'Parent pointer broken for key ' + this.key; }
+    if (this.right.parent !== this) { throw new Error('Parent pointer broken for key ' + this.key); }
     this.right.checkInternalPointers();
   }
 };
@@ -4884,7 +4886,7 @@ BinarySearchTree.prototype.checkInternalPointers = function () {
 BinarySearchTree.prototype.checkIsBST = function () {
   this.checkNodeOrdering();
   this.checkInternalPointers();
-  if (this.parent) { throw "The root shouldn't have a parent"; }
+  if (this.parent) { throw new Error("The root shouldn't have a parent"); }
 };
 
 
@@ -4962,10 +4964,10 @@ BinarySearchTree.prototype.insert = function (key, value) {
   // Same key as root
   if (this.compareKeys(this.key, key) === 0) {
     if (this.unique) {
-      throw { message: "Can't insert key " + key + ", it violates the unique constraint"
-            , key: key
-            , errorType: 'uniqueViolated'
-            };
+      var err = new Error("Can't insert key " + key + ", it violates the unique constraint");
+      err.key = key;
+      err.errorType = 'uniqueViolated';
+      throw err;
     } else {
       this.data.push(value);
     }
@@ -5317,7 +5319,10 @@ function defaultCompareKeysFunction (a, b) {
   if (a > b) { return 1; }
   if (a === b) { return 0; }
 
-  throw { message: "Couldn't compare elements", a: a, b: b };
+  var err = new Error("Couldn't compare elements");
+  err.a = a;
+  err.b = b;
+  throw err;
 }
 module.exports.defaultCompareKeysFunction = defaultCompareKeysFunction;
 
