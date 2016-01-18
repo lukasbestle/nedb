@@ -924,7 +924,7 @@ Cursor.prototype._exec = function(callback) {
       var criterion, compare, i;
       for (i = 0; i < criteria.length; i++) {
         criterion = criteria[i];
-        compare = criterion.direction * model.compareThings(model.getDotValue(a, criterion.key), model.getDotValue(b, criterion.key));
+        compare = criterion.direction * model.compareThings(model.getDotValue(a, criterion.key), model.getDotValue(b, criterion.key), self.db.compareStrings);
         if (compare !== 0) {
           return compare;
         }
@@ -1068,6 +1068,10 @@ var customUtils = require('./customUtils')
  * @param {Function} options.afterSerialization/options.beforeDeserialization Optional, serialization hooks
  * @param {Function/String} options.firstLine Optional, setter for the first line of the datastore file
  * @param {Number} options.corruptAlertThreshold Optional, threshold after which an alert is thrown if too much data is corrupt
+ * @param {Function} options.compareStrings Optional, string comparison function that overrides default for sorting
+ *
+ * Event Emitter - Events
+ * * compaction.done - Fired whenever a compaction operation was finished
  */
 function Datastore (options) {
   var filename;
@@ -1091,6 +1095,9 @@ function Datastore (options) {
   } else {
     this.filename = filename;
   }
+
+  // String comparison function
+  this.compareStrings = options.compareStrings;
 
   // Persistence handling
   this.persistence = new Persistence({ db: this, nodeWebkitAppName: options.nodeWebkitAppName
@@ -1117,6 +1124,8 @@ function Datastore (options) {
     if (err) { throw err; }
   }); }
 }
+
+util.inherits(Datastore, require('events'));
 
 
 /**
@@ -1707,7 +1716,7 @@ Datastore.prototype.remove = function () {
 
 module.exports = Datastore;
 
-},{"./cursor":5,"./customUtils":6,"./executor":8,"./indexes":9,"./model":10,"./persistence":11,"async":13,"underscore":19,"util":3}],8:[function(require,module,exports){
+},{"./cursor":5,"./customUtils":6,"./executor":8,"./indexes":9,"./model":10,"./persistence":11,"async":13,"events":1,"underscore":19,"util":3}],8:[function(require,module,exports){
 var process=require("__browserify_process");/**
  * Responsible for sequentially executing actions on the database
  */
@@ -2268,9 +2277,12 @@ function compareArrays (a, b) {
  * In the case of objects and arrays, we deep-compare
  * If two objects dont have the same type, the (arbitrary) type hierarchy is: undefined, null, number, strings, boolean, dates, arrays, objects
  * Return -1 if a < b, 1 if a > b and 0 if a = b (note that equality here is NOT the same as defined in areThingsEqual!)
+ *
+ * @param {Function} _compareStrings String comparing function, returning -1, 0 or 1, overriding default string comparison (useful for languages with accented letters)
  */
-function compareThings (a, b) {
-  var aKeys, bKeys, comp, i;
+function compareThings (a, b, _compareStrings) {
+  var aKeys, bKeys, comp, i
+    , compareStrings = _compareStrings || compareNSB;
 
   // undefined
   if (a === undefined) { return b === undefined ? 0 : -1; }
@@ -2285,8 +2297,8 @@ function compareThings (a, b) {
   if (typeof b === 'number') { return typeof a === 'number' ? compareNSB(a, b) : 1; }
 
   // Strings
-  if (typeof a === 'string') { return typeof b === 'string' ? compareNSB(a, b) : -1; }
-  if (typeof b === 'string') { return typeof a === 'string' ? compareNSB(a, b) : 1; }
+  if (typeof a === 'string') { return typeof b === 'string' ? compareStrings(a, b) : -1; }
+  if (typeof b === 'string') { return typeof a === 'string' ? compareStrings(a, b) : 1; }
 
   // Booleans
   if (typeof a === 'boolean') { return typeof b === 'boolean' ? compareNSB(a, b) : -1; }
@@ -2571,7 +2583,7 @@ function areThingsEqual (a, b) {
 
   // Arrays (no match since arrays are used as a $in)
   // undefined (no match since they mean field doesn't exist and can't be serialized)
-  if (util.isArray(a) || util.isArray(b) || a === undefined || b === undefined) { return false; }
+  if ((!(util.isArray(a) && util.isArray(b)) && (util.isArray(a) || util.isArray(b))) || a === undefined || b === undefined) { return false; }
 
   // General objects (check for deep equality)
   // a and b should be objects at this point
@@ -2790,6 +2802,11 @@ function matchQueryPart (obj, queryKey, queryValue, treatObjAsValue) {
 
   // Check if the value is an array if we don't force a treatment as value
   if (util.isArray(objValue) && !treatObjAsValue) {
+    // If the queryValue is an array, try to perform an exact match
+    if (util.isArray(queryValue)) {
+      return matchQueryPart(obj, queryKey, queryValue, true);
+    }
+
     // Check if we are using an array-specific comparison function
     if (queryValue !== null && typeof queryValue === 'object' && !util.isRegExp(queryValue)) {
       keys = Object.keys(queryValue);
@@ -2807,7 +2824,7 @@ function matchQueryPart (obj, queryKey, queryValue, treatObjAsValue) {
 
   // queryValue is an actual object. Determine whether it contains comparison operators
   // or only normal fields. Mixed objects are not allowed
-  if (queryValue !== null && typeof queryValue === 'object' && !util.isRegExp(queryValue)) {
+  if (queryValue !== null && typeof queryValue === 'object' && !util.isRegExp(queryValue) && !util.isArray(queryValue)) {
     keys = Object.keys(queryValue);
     firstChars = _.map(keys, function (item) { return item[0]; });
     dollarFirstChars = _.filter(firstChars, function (c) { return c === '$'; });
@@ -3021,7 +3038,11 @@ Persistence.prototype.persistCachedDatabase = function (cb) {
     }
   });
 
-  storage.crashSafeWriteFile(this.filename, toPersist, callback);
+  storage.crashSafeWriteFile(this.filename, toPersist, function (err) {
+    if (err) { return callback(err); }
+    self.db.emit('compaction.done');
+    return callback(null);
+  });
 };
 
 

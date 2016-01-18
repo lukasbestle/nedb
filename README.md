@@ -8,7 +8,7 @@
 **IMPORTANT NOTE**: Please don't submit issues for questions regarding your code. Only actual bugs or feature requests will be answered, all others will be closed without comment. Also, please follow the <a href="#bug-reporting-guidelines">bug reporting guidelines</a> and check the <a href="https://github.com/lukasbestle/newdb/wiki/Change-log" target="_blank">change log</a> before submitting an already fixed bug :)
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.6.0**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.6.2**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
@@ -58,6 +58,7 @@ You can use NewDB as an in-memory only datastore or as a persistent datastore. O
 * `beforeDeserialization` (optional): inverse of `afterSerialization`. Make sure to include both and not just one or you risk data loss. For the same reason, make sure both functions are inverses of one another. Some failsafe mechanisms are in place to prevent data loss if you misuse the serialization hooks: NewDB checks that never one is declared without the other, and checks that they are reverse of one another by testing on random strings of various lengths. In addition, if too much data is detected as corrupt, NewDB will refuse to start as it could mean you're not using the deserialization hook corresponding to the serialization hook used before (see below).
 * `firstLine` (optional): string or function. NewDB will use the string value or function return value to store it as the first line of the datastore. You can use this option to store metadata like the file type or database options that can be retrieved via `Datastore.getFirstLine()` again at any time. The (return) value **must absolutely not contain a `\n` character** (or data will be lost). Please see <a href="#storing-database-metadata">Storing database metadata</a> for more information
 * `corruptAlertThreshold` (optional): between 0 and 1, defaults to 10%. NewDB will refuse to start if more than this percentage of the datafile is corrupt. 0 means you don't tolerate any corruption, 1 means you don't care.
+* `compareStrings` (optional): function compareStrings(a, b) compares strings a and b and returns -1, 0 or 1. If specified, it overrides default string comparison which is not well adapted to non-US characters in particular accented letters. Native `localCompare` will most of the time be the right choice.
 * `nodeWebkitAppName` (optional, **DEPRECATED**): if you are using NewDB from whithin a Node Webkit app, specify its name (the same one you use in the `package.json`) in this field and the `filename` will be relative to the directory Node Webkit uses to store the rest of the application's data (local storage etc.). It works on Linux, OS X and Windows. Now that you can use `require('nw.gui').App.dataPath` in Node Webkit to get the path to the data directory for your application, you should not use this option anymore and it will be removed.
 
 If you use a persistent datastore without the `autoload` option, you need to call `loadDatabase` manually.
@@ -108,7 +109,7 @@ db.robots.loadDatabase();
 ### Persistence
 Under the hood, NewDB's persistence uses an append-only format, meaning that all updates and deletes actually result in lines added at the end of the datafile, for performance reasons. The database is automatically compacted (i.e. put back in the one-line-per-document format) every time you load each database within your application.
 
-You can manually call the compaction function with `yourDatabase.persistence.compactDatafile(callback)`. It queues a compaction of the datafile in the executor, to be executed sequentially after all pending operations and calls the optional `callback` afterwards.
+You can manually call the compaction function with `yourDatabase.persistence.compactDatafile(callback)`. It queues a compaction of the datafile in the executor, to be executed sequentially after all pending operations and calls the optional `callback` afterwards. The datastore will also fire a `compaction.done` event once compaction is finished.
 
 You can also set automatic compaction at regular intervals with `yourDatabase.persistence.setAutocompactionInterval(interval, callback)`, `interval` in milliseconds (a minimum of 5s is enforced), and stop automatic compaction with `yourDatabase.persistence.stopAutocompaction()`. The optional `callback` will be called after each compaction.
 
@@ -271,10 +272,17 @@ db.find({ planet: { $regex: /ar/, $nin: ['Jupiter', 'Earth'] } }, function (err,
 ```
 
 #### Array fields
-When a field in a document is an array, NewDB first tries to see if there is an array-specific comparison function (for now there is only `$size`) being used
-and tries it first. If there isn't, the query is treated as a query on every element and there is a match if at least one element matches.
+When a field in a document is an array, NewDB first tries to see if the query value is an array to perform an exact match, then whether there is an array-specific comparison function (for now there is only `$size`) being used. If not, the query is treated as a query on every element and there is a match if at least one element matches.
 
 ```javascript
+// Exact match
+db.find({ satellites: ['Phobos', 'Deimos'] }, function (err, docs) {
+  // docs contains Mars
+})
+db.find({ satellites: ['Deimos', 'Phobos'] }, function (err, docs) {
+  // docs is empty
+})
+
 // Using an array-specific comparison function
 // Note: you can't use nested comparison functions, e.g. { $size: { $lt: 5 } } will throw an error
 db.find({ satellites: { $size: 2 } }, function (err, docs) {
@@ -698,6 +706,15 @@ Connect and Express, backed by nedb
 * If you've outgrown NewDB, switching to MongoDB won't be too hard as it is the same API. Use <a href="https://github.com/louischatriot/nedb-to-mongodb" target="_blank">this utility</a> to transfer the data from a NeDB database to a MongoDB collection (note: does not support the additional NewDB features)
 * An ODM for NeDB: <a href="https://github.com/scottwrobinson/camo" target="_blank">Camo</a>
 
+## Pull requests
+If you submit a pull request, thanks! There are a couple rules to follow though to make it manageable:
+* We prefer new features to be added to the upstream project [NeDB](https://github.com/louischatriot/nedb), from which it will get into NewDB with the next version.
+* The pull request should be atomic, i.e. contain only one feature. If it contains more, please submit multiple pull requests. Reviewing massive, 1000 loc+ pull requests is extremely hard.
+* Likewise, if for one unique feature the pull request grows too large (more than 200 loc tests not included), please get in touch first.
+* Please stick to the current coding style. It's important that the code uses a coherent style for readability.
+* Do not include sylistic improvements ("housekeeping"). If you think one part deserves lots of housekeeping, use a separate pull request so as not to pollute the code.
+* Don't forget tests for your new feature. Also don't forget to run the whole test suite before submitting to make sure you didn't introduce regressions.
+* Do not build the browser version in your branch, I'll take care of it once the code is merged.
 
 ## Bug reporting guidelines
 If you report a bug, thank you! That said for the process to be manageable please strictly adhere to the following guidelines. I'll not be able to handle bug reports that don't:
