@@ -8,7 +8,7 @@
 **IMPORTANT NOTE**: Please don't submit issues for questions regarding your code. Only actual bugs or feature requests will be answered, all others will be closed without comment. Also, please follow the <a href="#bug-reporting-guidelines">bug reporting guidelines</a> and check the <a href="https://github.com/lukasbestle/newdb/wiki/Change-log" target="_blank">change log</a> before submitting an already fixed bug :)
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.6.2**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.7.1**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
@@ -554,6 +554,7 @@ To create an index, use `datastore.ensureIndex(options, cb)`, where callback is 
 * **fieldName** (required): name of the field to index. Use the dot notation to index a field in a nested document.
 * **unique** (optional, defaults to `false`): enforce field uniqueness. Note that a unique index will raise an error if you try to index two documents for which the field is not defined.
 * **sparse** (optional, defaults to `false`): don't index documents for which the field is not defined. Use this option along with "unique" if you want to accept multiple documents for which it is not defined.
+* **expireAfterSeconds** (number of seconds, optional): if set, the created index is a TTL (time to live) index, that will automatically remove documents when the system date becomes larger than the date on the indexed field plus `expireAfterSeconds`. Documents where the indexed field is not specified or not a `Date` object are ignored.
 
 Note: the `_id` is automatically indexed with a unique constraint, no need to call `ensureIndex` on it.
 
@@ -588,6 +589,18 @@ db.insert({ somefield: 'newdb' }, function (err) {
 // Remove index on field somefield
 db.removeIndex('somefield', function (err) {
 });
+
+// Example of using expireAfterSeconds to remove documents 1 hour
+// after their creation (db's timestampData option is true here)
+db.ensureIndex({ fieldName: 'createdAt', expireAfterSeconds: 3600 }, function (err) {
+});
+
+// You can also use the option to set an expiration date like so
+db.ensureIndex({ fieldName: 'expirationDate', expireAfterSeconds: 0 }, function (err) {
+  // Now all documents will expire when system time reaches the date in their
+  // expirationDate field
+});
+
 ```
 
 **Note:** the `ensureIndex` function creates the index synchronously, so it's best to use it at application startup. It's quite fast so it doesn't increase startup time much (35 ms for a collection containing 10,000 documents).
