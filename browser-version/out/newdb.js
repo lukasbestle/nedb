@@ -2406,6 +2406,9 @@ lastStepModifierFunctions.$unset = function (obj, field, value) {
 
 /**
  * Push an element to the end of an array field
+ * Optional modifier $each instead of value to push several values
+ * Optional modifier $slice to slice the resulting array, see https://docs.mongodb.org/manual/reference/operator/update/slice/
+ * Difference with MongoDB: if $slice is specified and not $each, we act as if value is an empty array
  */
 lastStepModifierFunctions.$push = function (obj, field, value) {
   // Create the array if it doesn't exist
@@ -2413,13 +2416,33 @@ lastStepModifierFunctions.$push = function (obj, field, value) {
 
   if (!util.isArray(obj[field])) { throw new Error("Can't $push an element on non-array values"); }
 
+  if (value !== null && typeof value === 'object' && value.$slice && value.$each === undefined) {
+    value.$each = [];
+  }
+
   if (value !== null && typeof value === 'object' && value.$each) {
-    if (Object.keys(value).length > 1) { throw new Error("Can't use another field in conjunction with $each"); }
+    if (Object.keys(value).length >= 3 || (Object.keys(value).length === 2 && value.$slice === undefined)) { throw new Error("Can only use $slice in cunjunction with $each when $push to array"); }
     if (!util.isArray(value.$each)) { throw new Error("$each requires an array value"); }
 
     value.$each.forEach(function (v) {
       obj[field].push(v);
     });
+
+    if (value.$slice === undefined || typeof value.$slice !== 'number') { return; }
+
+    if (value.$slice === 0) {
+      obj[field] = [];
+    } else {
+      var start, end, n = obj[field].length;
+      if (value.$slice < 0) {
+        start = Math.max(0, n + value.$slice);
+        end = n;
+      } else if (value.$slice > 0) {
+        start = 0;
+        end = Math.min(n, value.$slice);
+      }
+      obj[field] = obj[field].slice(start, end);
+    }
   } else {
     obj[field].push(value);
   }

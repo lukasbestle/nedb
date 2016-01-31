@@ -8,7 +8,7 @@
 **IMPORTANT NOTE**: Please don't submit issues for questions regarding your code. Only actual bugs or feature requests will be answered, all others will be closed without comment. Also, please follow the <a href="#bug-reporting-guidelines">bug reporting guidelines</a> and check the <a href="https://github.com/lukasbestle/newdb/wiki/Change-log" target="_blank">change log</a> before submitting an already fixed bug :)
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.7.1**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.7.2**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
@@ -416,7 +416,7 @@ db.count({}, function (err, count) {
 * `query` is the same kind of finding query you use with `find` and `findOne`
 * `update` specifies how the documents should be modified. It is either a new document or a set of modifiers (you cannot use both together, it doesn't make sense!)
   * A new document will replace the matched docs
-  * The modifiers create the fields they need to modify if they don't exist, and you can apply them to subdocs. Available field modifiers are `$set` to change a field's value, `$unset` to delete a field and `$inc` to increment a field's value. To work on arrays, you have `$push`, `$pop`, `$addToSet`, `$pull`, and the special `$each`. See examples below for the syntax.
+  * The modifiers create the fields they need to modify if they don't exist, and you can apply them to subdocs. Available field modifiers are `$set` to change a field's value, `$unset` to delete a field and `$inc` to increment a field's value. To work on arrays, you have `$push`, `$pop`, `$addToSet`, `$pull`, and the special `$each` and `$slice`. See examples below for the syntax.
 * `options` is an object with two possible parameters
   * `multi` (defaults to `false`) which allows the modification of several documents if set to true
   * `upsert` (defaults to `false`) if you want to insert a new document corresponding to the `update` rules if your `query` doesn't match anything. If your `update` is a simple object with no modifiers, it is the inserted document. In the other case, the `query` is stripped from all operator recursively, and the `update` is applied to it.
@@ -511,12 +511,18 @@ db.update({ _id: 'id6' }, { $pull: { fruits: $in: ['apple', 'pear'] } }, {}, fun
   // Now the fruits array is ['orange']
 });
 
-
-
 // $each can be used to $push or $addToSet multiple values at once
 // This example works the same way with $addToSet
-db.update({ _id: 'id6' }, { $push: { fruits: {$each: ['banana', 'orange'] } } }, {}, function () {
+db.update({ _id: 'id6' }, { $push: { fruits: { $each: ['banana', 'orange'] } } }, {}, function () {
   // Now the fruits array is ['apple', 'orange', 'pear', 'banana', 'orange']
+});
+
+// $slice can be used in cunjunction with $push and $each to limit the size of the resulting array.
+// A value of 0 will update the array to an empty array. A positive value n will keep only the n first elements
+// A negative value -n will keep only the last n elements.
+// If $slice is specified but not $each, $each is set to []
+db.update({ _id: 'id6' }, { $push: { fruits: { $each: ['banana'], $slice: 2 } } }, {}, function () {
+  // Now the fruits array is ['apple', 'orange']
 });
 ```
 
@@ -728,6 +734,8 @@ If you submit a pull request, thanks! There are a couple rules to follow though 
 * Do not include sylistic improvements ("housekeeping"). If you think one part deserves lots of housekeeping, use a separate pull request so as not to pollute the code.
 * Don't forget tests for your new feature. Also don't forget to run the whole test suite before submitting to make sure you didn't introduce regressions.
 * Do not build the browser version in your branch, I'll take care of it once the code is merged.
+* Update the readme accordingly.
+* Last but not least: keep in mind what NeDB's and NewDB's mindset is! The goal is not to be a replacement for MongoDB, but to have a pure JS database, easy to use, cross platform, fast and expressive enough for the target projects (small and self contained apps on server/desktop/browser/mobile). Sometimes it's better to shoot for simplicity than for API completeness with regards to MongoDB.
 
 ## Bug reporting guidelines
 If you report a bug, thank you! That said for the process to be manageable please strictly adhere to the following guidelines. I'll not be able to handle bug reports that don't:
