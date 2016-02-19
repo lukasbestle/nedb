@@ -8,7 +8,7 @@
 **IMPORTANT NOTE**: Please don't submit issues for questions regarding your code. Only actual bugs or feature requests will be answered, all others will be closed without comment. Also, please follow the <a href="#bug-reporting-guidelines">bug reporting guidelines</a> and check the <a href="https://github.com/lukasbestle/newdb/wiki/Change-log" target="_blank">change log</a> before submitting an already fixed bug :)
 
 ## This is a fork of [NeDB](https://github.com/louischatriot/nedb)
-NewDB is a **fork** of NeDB and is **currently based on NeDB v1.7.2**.
+NewDB is a **fork** of NeDB and is **currently based on NeDB v1.8.0**.
 
 NewDB adds the following features to the existing feature set of NeDB:
 
@@ -272,7 +272,10 @@ db.find({ planet: { $regex: /ar/, $nin: ['Jupiter', 'Earth'] } }, function (err,
 ```
 
 #### Array fields
-When a field in a document is an array, NewDB first tries to see if the query value is an array to perform an exact match, then whether there is an array-specific comparison function (for now there is only `$size`) being used. If not, the query is treated as a query on every element and there is a match if at least one element matches.
+When a field in a document is an array, NewDB first tries to see if the query value is an array to perform an exact match, then whether there is an array-specific comparison function (for now there is only `$size` and `$elemMatch`) being used. If not, the query is treated as a query on every element and there is a match if at least one element matches.
+
+* `$size`: match on the size of the array
+* `$elemMatch`: matches if at least one array element matches the query entirely
 
 ```javascript
 // Exact match
@@ -284,6 +287,20 @@ db.find({ satellites: ['Deimos', 'Phobos'] }, function (err, docs) {
 })
 
 // Using an array-specific comparison function
+// $elemMatch operator will provide match for a document, if an element from the array field satisfies all the conditions specified with the `$elemMatch` operator
+db.find({ completeData: { planets: { $elemMatch: { name: 'Earth', number: 3 } } } }, function (err, docs) {
+  // docs contains documents with id 5 (completeData)
+});
+
+db.find({ completeData: { planets: { $elemMatch: { name: 'Earth', number: 5 } } } }, function (err, docs) {
+  // docs is empty
+});
+
+// You can use inside #elemMatch query any known document query operator
+db.find({ completeData: { planets: { $elemMatch: { name: 'Earth', number: { $gt: 2 } } } } }, function (err, docs) {
+  // docs contains documents with id 5 (completeData)
+});
+
 // Note: you can't use nested comparison functions, e.g. { $size: { $lt: 5 } } will throw an error
 db.find({ satellites: { $size: 2 } }, function (err, docs) {
   // docs contains Mars
@@ -361,7 +378,7 @@ db.find({}).sort({ firstField: 1, secondField: -1 }) ...   // You understand how
 ```
 
 #### Projections
-You can give `find` and `findOne` an optional second argument, `projections`. The syntax is the same as MongoDB: `{ a: 1, b: 1 }` to return only the `a` and `b` fields, `{ a: 0, b: 0 }` to omit these two fields. You cannot use both modes at the time, except for `_id` which is by default always returned and which you can choose to omit.
+You can give `find` and `findOne` an optional second argument, `projections`. The syntax is the same as MongoDB: `{ a: 1, b: 1 }` to return only the `a` and `b` fields, `{ a: 0, b: 0 }` to omit these two fields. You cannot use both modes at the time, except for `_id` which is by default always returned and which you can choose to omit. You can project on nested documents.
 
 ```javascript
 // Same database as above
@@ -387,9 +404,13 @@ db.find({ planet: 'Mars' }, { planet: 0, system: 1 }, function (err, docs) {
 });
 
 // You can also use it in a Cursor way but this syntax is not compatible with MongoDB
-// If upstream compatibility is important don't use this method
 db.find({ planet: 'Mars' }).projection({ planet: 1, system: 1 }).exec(function (err, docs) {
   // docs is [{ planet: 'Mars', system: 'solar', _id: 'id1' }]
+});
+
+// Project on a nested document
+db.findOne({ planet: 'Earth' }).projection({ planet: 1, 'humans.genders': 1 }).exec(function (err, doc) {
+  // doc is { planet: 'Earth', _id: 'id2', humans: { genders: 2 } }
 });
 ```
 
@@ -416,14 +437,16 @@ db.count({}, function (err, count) {
 * `query` is the same kind of finding query you use with `find` and `findOne`
 * `update` specifies how the documents should be modified. It is either a new document or a set of modifiers (you cannot use both together, it doesn't make sense!)
   * A new document will replace the matched docs
-  * The modifiers create the fields they need to modify if they don't exist, and you can apply them to subdocs. Available field modifiers are `$set` to change a field's value, `$unset` to delete a field and `$inc` to increment a field's value. To work on arrays, you have `$push`, `$pop`, `$addToSet`, `$pull`, and the special `$each` and `$slice`. See examples below for the syntax.
+  * The modifiers create the fields they need to modify if they don't exist, and you can apply them to subdocs. Available field modifiers are `$set` to change a field's value, `$unset` to delete a field, `$inc` to increment a field's value and `$min`/`$max` to change field's value, only if provided value is less/greater than current value. To work on arrays, you have `$push`, `$pop`, `$addToSet`, `$pull`, and the special `$each` and `$slice`. See examples below for the syntax.
 * `options` is an object with two possible parameters
   * `multi` (defaults to `false`) which allows the modification of several documents if set to true
   * `upsert` (defaults to `false`) if you want to insert a new document corresponding to the `update` rules if your `query` doesn't match anything. If your `update` is a simple object with no modifiers, it is the inserted document. In the other case, the `query` is stripped from all operator recursively, and the `update` is applied to it.
   * `returnUpdatedDocs` (defaults to `false`, not MongoDB-compatible) if set to true and update is not an upsert, will return the array of documents matched bu the find query and updated. Updated documents will be returned even if the update did not actually modify them
-* `callback` (optional) signature: `err`, `numReplaced`, `newDoc`
-  * `numReplaced` is the number of documents replaced
-  * `newDoc` is the created document if the upsert mode was chosen and a document was inserted
+* `callback` (optional) signature: `(err, numAffected, affectedDocuments, upsert)`. **Warning**: the API was changed between v1.5.1 and v1.6. Please refer to the <a href="https://github.com/lukasbestle/newdb/wiki/Change-log" target="_blank">change log</a> to see the change.
+  * For an upsert, `affectedDocuments` contains the inserted document and the `upsert` flag is set to `true`.
+  * For a standard update with `returnUpdatedDocs` flag set to `false`, `affectedDocuments` is not set.
+  * For a standard update with `returnUpdatedDocs` flag set to `true` and `multi` to `false`, `affectedDocuments` is the updated document.
+  * For a standard update with `returnUpdatedDocs` flag set to `true` and `multi` to `true`, `affectedDocuments` is the array of updated documents.
 
 **Note**: you can't change a document's _id.
 
@@ -524,6 +547,17 @@ db.update({ _id: 'id6' }, { $push: { fruits: { $each: ['banana', 'orange'] } } }
 db.update({ _id: 'id6' }, { $push: { fruits: { $each: ['banana'], $slice: 2 } } }, {}, function () {
   // Now the fruits array is ['apple', 'orange']
 });
+
+// $min/$max to update only if provided value is less/greater than current value
+// Let's say the database contains this document
+// doc = { _id: 'id', name: 'Name', value: 5 }
+db.update({ _id: 'id1' }, { $min: { value: 2 } }, {}, function () {
+  // The document will be updated to { _id: 'id', name: 'Name', value: 2 }
+});
+
+db.update({ _id: 'id1' }, { $min: { value: 8 } }, {}, function () {
+  // The document will not be modified
+});
 ```
 
 ### Removing documents
@@ -549,6 +583,10 @@ db.remove({ _id: 'id2' }, {}, function (err, numRemoved) {
 db.remove({ system: 'solar' }, { multi: true }, function (err, numRemoved) {
   // numRemoved = 3
   // All planets from the solar system were removed
+});
+
+// Removing all documents with the 'match-all' query
+db.remove({}, { multi: true }, function (err, numRemoved) {
 });
 ```
 

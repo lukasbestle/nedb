@@ -790,7 +790,7 @@ var model = require('./model')
  * Create a new cursor for this collection
  * @param {Datastore} db - The datastore this cursor is bound to
  * @param {Query} query - The query this cursor will operate on
- * @param {Function} execDn - Handler to be executed after cursor has found the results and before the callback passed to find/findOne/update/remove
+ * @param {Function} execFn - Handler to be executed after cursor has found the results and before the callback passed to find/findOne/update/remove
  */
 function Cursor (db, query, execFn) {
   this.db = db;
@@ -862,7 +862,19 @@ Cursor.prototype.project = function (candidates) {
 
   // Do the actual projection
   candidates.forEach(function (candidate) {
-    var toPush = action === 1 ? _.pick(candidate, keys) : _.omit(candidate, keys);
+    var toPush;
+    if (action === 1) {   // pick-type projection
+      toPush = { $set: {} };
+      keys.forEach(function (k) {
+        toPush.$set[k] = model.getDotValue(candidate, k);
+        if (toPush.$set[k] === undefined) { delete toPush.$set[k]; }
+      });
+      toPush = model.modify({}, toPush);
+    } else {   // omit-type projection
+      toPush = { $unset: {} };
+      keys.forEach(function (k) { toPush.$unset[k] = true });
+      toPush = model.modify(candidate, toPush);
+    }
     if (keepId) {
       toPush._id = candidate._id;
     } else {
@@ -1329,7 +1341,7 @@ Datastore.prototype.updateIndexes = function (oldDoc, newDoc) {
  *
  * @param {Query} query
  * @param {Boolean} dontExpireStaleDocs Optional, defaults to false, if true don't remove stale docs. Useful for the remove function which shouldn't be impacted by expirations
- * @param {Function} callback Signature err, docs
+ * @param {Function} callback Signature err, candidates
  */
 Datastore.prototype.getCandidates = function (query, dontExpireStaleDocs, callback) {
   var indexNames = Object.keys(this.indexes)
@@ -1340,6 +1352,7 @@ Datastore.prototype.getCandidates = function (query, dontExpireStaleDocs, callba
     callback = dontExpireStaleDocs;
     dontExpireStaleDocs = false;
   }
+
 
   async.waterfall([
   // STEP 1: get candidates list by checking indexes from most to least frequent usecase
@@ -1617,7 +1630,20 @@ Datastore.prototype.findOne = function (query, projection, callback) {
  *                 options.multi If true, can update multiple documents (defaults to false)
  *                 options.upsert If true, document is inserted if the query doesn't match anything
  *                 options.returnUpdatedDocs Defaults to false, if true return as third argument the array of updated matched documents (even if no change actually took place)
- * @param {Function} cb Optional callback, signature: err, numReplaced, upsert (set to true if the update was in fact an upsert)
+ * @param {Function} cb Optional callback, signature: (err, numAffected, affectedDocuments, upsert)
+ *                      If update was an upsert, upsert flag is set to true
+ *                      affectedDocuments can be one of the following:
+ *                        * For an upsert, the upserted document
+ *                        * For an update with returnUpdatedDocs option false, null
+ *                        * For an update with returnUpdatedDocs true and multi false, the updated document
+ *                        * For an update with returnUpdatedDocs true and multi true, the array of updated documents
+ *
+ * WARNING: The API was changed between v1.5.1 and v1.6, for consistency and readability reasons. Prior and including to v1.5.1,
+ *          the callback signature was (err, numAffected, updated) where updated was the updated document in case of an upsert
+ *          or the array of updated documents for an update if the returnUpdatedDocs option was true. That meant that the type of
+ *          affectedDocuments in a non multi update depended on whether there was an upsert or not, leaving only two ways for the
+ *          user to check whether an upsert had occured: checking the type of affectedDocuments or running another find query on
+ *          the whole dataset to check its size. Both options being ugly, the breaking change was necessary.
  *
  * @api private Use Datastore.update which has the same signature
  */
@@ -1663,13 +1689,13 @@ Datastore.prototype._update = function (query, updateQuery, options, cb) {
 
         return self._insert(toBeInserted, function (err, newDoc) {
           if (err) { return callback(err); }
-          return callback(null, 1, newDoc);
+          return callback(null, 1, newDoc, true);
         });
       }
     });
   }
   , function () {   // Perform the update
-    var modifiedDoc , modifications = [];
+    var modifiedDoc , modifications = [], createdAt;
 
     self.getCandidates(query, function (err, candidates) {
       if (err) { return callback(err); }
@@ -1680,8 +1706,12 @@ Datastore.prototype._update = function (query, updateQuery, options, cb) {
         for (i = 0; i < candidates.length; i += 1) {
           if (model.match(candidates[i], query) && (multi || numReplaced === 0)) {
             numReplaced += 1;
+            if (self.timestampData) { createdAt = candidates[i].createdAt; }
             modifiedDoc = model.modify(candidates[i], updateQuery);
-            if (self.timestampData) { modifiedDoc.updatedAt = new Date(); }
+            if (self.timestampData) {
+              modifiedDoc.createdAt = createdAt;
+              modifiedDoc.updatedAt = new Date();
+            }
             modifications.push({ oldDoc: candidates[i], newDoc: modifiedDoc });
           }
         }
@@ -1705,6 +1735,7 @@ Datastore.prototype._update = function (query, updateQuery, options, cb) {
         } else {
           var updatedDocsDC = [];
           updatedDocs.forEach(function (doc) { updatedDocsDC.push(model.deepCopy(doc)); });
+          if (! multi) { updatedDocsDC = updatedDocsDC[0]; }
           return callback(null, numReplaced, updatedDocsDC);
         }
       });
@@ -1778,17 +1809,16 @@ function Executor () {
 
   // This queue will execute all commands, one-by-one in order
   this.queue = async.queue(function (task, cb) {
-    var callback
-      , lastArg = task.arguments[task.arguments.length - 1]
-      , i, newArguments = []
-      ;
+    var newArguments = [];
 
     // task.arguments is an array-like object on which adding a new field doesn't work, so we transform it into a real array
-    for (i = 0; i < task.arguments.length; i += 1) { newArguments.push(task.arguments[i]); }
+    for (var i = 0; i < task.arguments.length; i += 1) { newArguments.push(task.arguments[i]); }
+    var lastArg = task.arguments[task.arguments.length - 1];
 
     // Always tell the queue task is complete. Execute callback if any was given.
     if (typeof lastArg === 'function') {
-      callback = function () {
+      // Callback was supplied
+      newArguments[newArguments.length - 1] = function () {
         if (typeof setImmediate === 'function') {
            setImmediate(cb);
         } else {
@@ -1796,11 +1826,12 @@ function Executor () {
         }
         lastArg.apply(null, arguments);
       };
-
-      newArguments[newArguments.length - 1] = callback;
+    } else if (!lastArg && task.arguments.length !== 0) {
+      // false/undefined/null supplied as callbback
+      newArguments[newArguments.length - 1] = function () { cb(); };
     } else {
-      callback = function () { cb(); };
-      newArguments.push(callback);
+      // Nothing supplied as callback
+      newArguments.push(function () { cb(); });
     }
 
 
@@ -1815,7 +1846,8 @@ function Executor () {
  * @param {Object} task
  *                 task.this - Object to use as this
  *                 task.fn - Function to execute
- *                 task.arguments - Array of arguments
+ *                 task.arguments - Array of arguments, IMPORTANT: only the last argument may be a function (the callback)
+ *                                                                 and the last argument cannot be false/undefined/null
  * @param {Boolean} forceQueuing Optional (defaults to false) force executor to queue task even if it is not ready
  */
 Executor.prototype.push = function (task, forceQueuing) {
@@ -2528,6 +2560,28 @@ lastStepModifierFunctions.$inc = function (obj, field, value) {
   }
 };
 
+/**
+ * Updates the value of the field, only if specified field is greater than the current value of the field
+ */
+lastStepModifierFunctions.$max = function (obj, field, value) {
+  if (typeof obj[field] === 'undefined') {
+    obj[field] = value;
+  } else if (value > obj[field]) {
+    obj[field] = value;
+  }
+};
+
+/**
+ * Updates the value of the field, only if specified field is smaller than the current value of the field
+ */
+lastStepModifierFunctions.$min = function (obj, field, value) {
+  if (typeof obj[field] === 'undefined') { 
+    obj[field] = value;
+  } else if (value < obj[field]) {
+    obj[field] = value;
+  }
+};
+
 // Given its name, create the complete modifier function
 function createModifierFunction (modifier) {
   return function (obj, field, value) {
@@ -2536,7 +2590,10 @@ function createModifierFunction (modifier) {
     if (fieldParts.length === 1) {
       lastStepModifierFunctions[modifier](obj, field, value);
     } else {
-      obj[fieldParts[0]] = obj[fieldParts[0]] || {};
+      if (obj[fieldParts[0]] === undefined) {
+        if (modifier === '$unset') { return; }   // Bad looking specific fix, needs to be generalized modifiers that behave like $unset are implemented
+        obj[fieldParts[0]] = {};
+      }
       modifierFunctions[modifier](obj[fieldParts[0]], fieldParts.slice(1), value);
     }
   };
@@ -2577,7 +2634,7 @@ function modify (obj, updateQuery) {
 
       if (!modifierFunctions[m]) { throw new Error("Unknown modifier " + m); }
 
-      // Can't rely on Object.keys throwing on non objects since ES6{
+      // Can't rely on Object.keys throwing on non objects since ES6
       // Not 100% satisfying as non objects can be interpreted as objects but no false negatives so we can live with it
       if (typeof updateQuery[m] !== 'object') {
         throw new Error("Modifier " + m + "'s argument must be an object");
@@ -2764,7 +2821,20 @@ comparisonFunctions.$size = function (obj, value) {
 
     return (obj.length == value);
 };
+comparisonFunctions.$elemMatch = function (obj, value) {
+  if (!util.isArray(obj)) { return false; }
+  var i = obj.length;
+  var result = false;   // Initialize result
+  while (i--) {
+    if (match(obj[i], value)) {   // If match for array element, return true
+      result = true;
+      break;
+    }
+  }
+  return result;
+};
 arrayComparisonFunctions.$size = true;
+arrayComparisonFunctions.$elemMatch = true;
 
 
 /**
