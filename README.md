@@ -2,6 +2,7 @@
 
 ## The JavaScript Database
 [![Build Status](https://travis-ci.org/lukasbestle/newdb.svg)](https://travis-ci.org/lukasbestle/newdb)
+[![Known Vulnerabilities](https://snyk.io/test/github/lukasbestle/newdb/badge.svg)](https://snyk.io/test/github/lukasbestle/newdb)
 
 **Embedded persistent or in memory database for Node.js, nw.js, Electron and browsers, 100% JavaScript, no binary dependency**. API is a subset of MongoDB's and it's <a href="#speed">plenty fast</a>.
 
